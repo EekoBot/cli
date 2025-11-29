@@ -198,7 +198,7 @@ console.log('Config:', state.globalConfig);
 
 ## TypeScript Support
 
-Install the SDK for type definitions:
+Install the [@eeko/sdk](https://github.com/EekoBot/sdk) for type definitions:
 
 ```bash
 pnpm add -D @eeko/sdk

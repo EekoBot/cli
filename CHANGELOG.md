@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2024-11-29
+
+### Fixed
+- Added link to [@eeko/sdk](https://github.com/EekoBot/sdk) in documentation
+
 ## [0.1.0] - 2024-11-29
 
 ### Added
@@ -20,5 +25,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Interactive keyboard shortcuts in dev mode (1-4 for test events)
 - Automatic port selection when defaults are in use
 
-[Unreleased]: https://github.com/EekoBot/cli/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/EekoBot/cli/releases/tag/v0.1.0
+[Unreleased]: https://github.com/EekoBot/cli/compare/0.1.1...HEAD
+[0.1.1]: https://github.com/EekoBot/cli/compare/0.1.0...0.1.1
+[0.1.0]: https://github.com/EekoBot/cli/releases/tag/0.1.0
