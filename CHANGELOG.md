@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.1] - 2024-11-29
 
+### Changed
+- Replaced tiged with giget for template cloning (removes deprecated dependency warnings)
+
 ### Fixed
 - Added link to [@eeko/sdk](https://github.com/EekoBot/sdk) in documentation
 

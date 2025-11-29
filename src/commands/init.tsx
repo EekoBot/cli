@@ -15,7 +15,7 @@ import TextInput from 'ink-text-input'
 import Spinner from 'ink-spinner'
 import fs from 'fs/promises'
 import path from 'path'
-import tiged from 'tiged'
+import { downloadTemplate } from 'giget'
 
 /**
  * Sanitize project name to prevent path traversal
@@ -257,17 +257,10 @@ async function createProject(
 
   setStatus(`Cloning ${repo}...`)
 
-  const emitter = tiged(repo, {
-    disableCache: true,
+  await downloadTemplate(`github:${repo}`, {
+    dir: targetDir,
     force: true,
-    verbose: false,
   })
-
-  emitter.on('info', (info: { message: string }) => {
-    setStatus(info.message)
-  })
-
-  await emitter.clone(targetDir)
 
   setStatus('Done!')
   return targetDir
