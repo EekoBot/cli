@@ -1,0 +1,47 @@
+# Source files
+src/
+*.ts
+!*.d.ts
+
+# Development files
+tsconfig.json
+tsup.config.ts
+.vscode/
+.idea/
+
+# Tests
+coverage/
+*.spec.ts
+*.test.ts
+__tests__/
+
+# CI/CD
+.github/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Environment
+.env
+.env.*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Package manager files
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# Misc
+.cache/
+.temp/
+*.tsbuildinfo
+node_modules/
