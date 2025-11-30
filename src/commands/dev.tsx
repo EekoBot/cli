@@ -14,8 +14,9 @@ import { render, Box, Text, useApp, useInput } from 'ink'
 import Spinner from 'ink-spinner'
 import { startDevServer, type DevServer } from '../server/vite-plugin.js'
 import { createDevWebSocketServer, type DevWebSocketServer } from '../server/ws-server.js'
-import type { EventType } from '@eeko/sdk'
 import open from 'open'
+import { TestEventMenu } from '../components/TestEventMenu.js'
+import { findEventByShortcut, type TestEventDefinition } from '../test-events/index.js'
 
 interface DevUIProps {
   port: number
@@ -29,51 +30,6 @@ interface EventLogEntry {
   preview: string
 }
 
-// Test event payloads
-const TEST_EVENTS: Record<string, { event: EventType; payload: unknown }> = {
-  '1': {
-    event: 'component_trigger',
-    payload: {
-      username: 'TestUser',
-      amount: 5,
-      message: 'Great stream!',
-      textTop: 'TestUser donated!',
-      textBottom: '$5.00 - Great stream!',
-    },
-  },
-  '2': {
-    event: 'chat_message',
-    payload: {
-      user: {
-        displayName: 'Viewer123',
-        username: 'viewer123',
-        color: '#ff6b6b',
-      },
-      message: {
-        text: 'Hello from the chat!',
-      },
-      context: {
-        platform: 'twitch',
-      },
-    },
-  },
-  '3': {
-    event: 'component_update',
-    payload: {
-      data: {
-        count: 5,
-      },
-    },
-  },
-  '4': {
-    event: 'variable_updated',
-    payload: {
-      current: 10,
-      previous: 5,
-    },
-  },
-}
-
 function DevUI({ port, wsPort, autoOpen }: DevUIProps) {
   const { exit } = useApp()
   const [serverStatus, setServerStatus] = useState<'starting' | 'ready' | 'error'>('starting')
@@ -82,13 +38,24 @@ function DevUI({ port, wsPort, autoOpen }: DevUIProps) {
   const [error, setError] = useState<string | null>(null)
   const [actualPort, setActualPort] = useState(port)
   const [actualWsPort, setActualWsPort] = useState(wsPort)
+  const [showEventMenu, setShowEventMenu] = useState(false)
 
   // Refs to hold server instances for cleanup
   const wsRef = React.useRef<DevWebSocketServer | null>(null)
   const serverRef = React.useRef<DevServer | null>(null)
 
+  // Send a test event
+  const sendTestEvent = (eventDef: TestEventDefinition) => {
+    if (wsRef.current && serverStatus === 'ready') {
+      wsRef.current.emitEvent(eventDef.event, eventDef.createPayload())
+    }
+  }
+
   // Handle keyboard input
   useInput((input, key) => {
+    // Don't handle input when menu is open (menu handles its own input)
+    if (showEventMenu) return
+
     if (input === 'q' || (key.ctrl && input === 'c')) {
       wsRef.current?.close()
       serverRef.current?.close()
@@ -100,10 +67,15 @@ function DevUI({ port, wsPort, autoOpen }: DevUIProps) {
     if (input === 'c') {
       setEvents([])
     }
-    // Send test events with number keys
-    if (TEST_EVENTS[input] && wsRef.current && serverStatus === 'ready') {
-      const { event, payload } = TEST_EVENTS[input]
-      wsRef.current.emitEvent(event, payload)
+    // 't' opens interactive event menu
+    if (input === 't' && serverStatus === 'ready') {
+      setShowEventMenu(true)
+      return
+    }
+    // Send test events with number keys (0-9)
+    const eventDef = findEventByShortcut(input)
+    if (eventDef && serverStatus === 'ready') {
+      sendTestEvent(eventDef)
     }
   })
 
@@ -183,6 +155,27 @@ function DevUI({ port, wsPort, autoOpen }: DevUIProps) {
     }
   }, [])
 
+  // Show event menu overlay
+  if (showEventMenu) {
+    return (
+      <Box flexDirection="column" padding={1}>
+        <Box marginBottom={1}>
+          <Text bold color="cyan">
+            Eeko Dev Server
+          </Text>
+          <Text dimColor> - Test Event Menu</Text>
+        </Box>
+        <TestEventMenu
+          onSelect={(eventDef) => {
+            sendTestEvent(eventDef)
+            setShowEventMenu(false)
+          }}
+          onCancel={() => setShowEventMenu(false)}
+        />
+      </Box>
+    )
+  }
+
   return (
     <Box flexDirection="column" padding={1}>
       {/* Header */}
@@ -210,9 +203,7 @@ function DevUI({ port, wsPort, autoOpen }: DevUIProps) {
             </Text>
           </Text>
         )}
-        {serverStatus === 'error' && (
-          <Text color="red">✖ Error: {error}</Text>
-        )}
+        {serverStatus === 'error' && <Text color="red">✖ Error: {error}</Text>}
       </Box>
 
       {/* WebSocket Status */}
@@ -228,7 +219,7 @@ function DevUI({ port, wsPort, autoOpen }: DevUIProps) {
       <Box flexDirection="column" marginTop={1}>
         <Text bold>Recent Events:</Text>
         {events.length === 0 ? (
-          <Text dimColor>  No events yet. Use `eeko test` to send events.</Text>
+          <Text dimColor> No events yet. Press a number key or t to send test events.</Text>
         ) : (
           events.map((event, i) => (
             <Text key={i} dimColor>
@@ -246,27 +237,76 @@ function DevUI({ port, wsPort, autoOpen }: DevUIProps) {
       {/* Test Events */}
       {serverStatus === 'ready' && (
         <Box flexDirection="column" marginTop={1}>
-          <Text bold color="green">► Press to send test events:</Text>
+          <Text bold color="green">
+            ► Quick test events:
+          </Text>
           <Box marginTop={0} flexDirection="column">
             <Text>
-              {'  '}<Text color="black" backgroundColor="yellow" bold> 1 </Text>
-              <Text color="white"> trigger</Text>
-              <Text dimColor> (donation/follow)</Text>
+              {'  '}
+              <Text color="black" backgroundColor="yellow" bold>
+                {' '}
+                1{' '}
+              </Text>
+              <Text> Twitch Chat </Text>
+              <Text color="black" backgroundColor="yellow" bold>
+                {' '}
+                4{' '}
+              </Text>
+              <Text> Twitch Sub </Text>
+              <Text color="black" backgroundColor="yellow" bold>
+                {' '}
+                7{' '}
+              </Text>
+              <Text> Kick Sub</Text>
             </Text>
             <Text>
-              {'  '}<Text color="black" backgroundColor="yellow" bold> 2 </Text>
-              <Text color="white"> chat</Text>
-              <Text dimColor> (chat message)</Text>
+              {'  '}
+              <Text color="black" backgroundColor="yellow" bold>
+                {' '}
+                2{' '}
+              </Text>
+              <Text> YouTube Chat</Text>
+              <Text color="black" backgroundColor="yellow" bold>
+                {' '}
+                5{' '}
+              </Text>
+              <Text> Gift Sub   </Text>
+              <Text color="black" backgroundColor="yellow" bold>
+                {' '}
+                8{' '}
+              </Text>
+              <Text> Bits</Text>
             </Text>
             <Text>
-              {'  '}<Text color="black" backgroundColor="yellow" bold> 3 </Text>
-              <Text color="white"> update</Text>
-              <Text dimColor> (config change)</Text>
+              {'  '}
+              <Text color="black" backgroundColor="yellow" bold>
+                {' '}
+                3{' '}
+              </Text>
+              <Text> Kick Chat   </Text>
+              <Text color="black" backgroundColor="yellow" bold>
+                {' '}
+                6{' '}
+              </Text>
+              <Text> YT Member  </Text>
+              <Text color="black" backgroundColor="yellow" bold>
+                {' '}
+                9{' '}
+              </Text>
+              <Text> Follow</Text>
             </Text>
             <Text>
-              {'  '}<Text color="black" backgroundColor="yellow" bold> 4 </Text>
-              <Text color="white"> variable</Text>
-              <Text dimColor> (variable change)</Text>
+              {'  '}
+              <Text color="black" backgroundColor="yellow" bold>
+                {' '}
+                0{' '}
+              </Text>
+              <Text> Trigger     </Text>
+              <Text color="black" backgroundColor="cyan" bold>
+                {' '}
+                t{' '}
+              </Text>
+              <Text color="cyan"> More events...</Text>
             </Text>
           </Box>
         </Box>

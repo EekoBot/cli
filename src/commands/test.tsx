@@ -4,7 +4,10 @@
  * Examples:
  *   eeko test trigger --username="TestUser" --amount=5
  *   eeko test chat --message="Hello world!" --platform=twitch
- *   eeko test mount
+ *   eeko test sub --platform=twitch --tier=1
+ *   eeko test bits --amount=100
+ *   eeko test follow
+ *   eeko test all-chat
  */
 
 import { Command } from 'commander'
@@ -12,22 +15,34 @@ import React, { useState, useEffect } from 'react'
 import { render, Box, Text } from 'ink'
 import Spinner from 'ink-spinner'
 import WebSocket from 'ws'
-import type {
-  EventType,
-  ComponentTriggerPayload,
-  ChatMessagePayload,
-} from '@eeko/sdk'
+import type { EventType } from '@eeko/sdk'
+import {
+  createTwitchChatPayload,
+  createYouTubeChatPayload,
+  createKickChatPayload,
+  createTwitchSubPayload,
+  createTwitchGiftSubPayload,
+  createTwitchResubPayload,
+  createYouTubeMemberPayload,
+  createKickSubPayload,
+  createKickGiftSubPayload,
+  createBitsPayload,
+  createFollowPayload,
+  createTriggerPayload,
+  createMountPayload,
+  createUnmountPayload,
+  getAllTestChatPayloads,
+} from '../test-events/index.js'
 
 const WS_PORT = 9876
-
-interface TestEventResult {
-  success: boolean
-  message: string
-}
 
 interface TestUIProps {
   eventType: EventType
   payload: unknown
+}
+
+interface MultiEventUIProps {
+  events: Array<{ eventType: EventType; payload: unknown; delay?: number }>
 }
 
 function TestUI({ eventType, payload }: TestUIProps) {
@@ -89,90 +104,108 @@ function TestUI({ eventType, payload }: TestUIProps) {
           <Text> Sending event...</Text>
         </>
       )}
-      {status === 'success' && (
-        <Text color="green">✓ {message}</Text>
-      )}
-      {status === 'error' && (
-        <Text color="red">✖ {message}</Text>
-      )}
+      {status === 'success' && <Text color="green">✓ {message}</Text>}
+      {status === 'error' && <Text color="red">✖ {message}</Text>}
     </Box>
   )
 }
 
-function buildTriggerPayload(options: Record<string, string>): ComponentTriggerPayload {
-  const payload: ComponentTriggerPayload = {}
+function MultiEventUI({ events }: MultiEventUIProps) {
+  const [status, setStatus] = useState<'connecting' | 'sending' | 'success' | 'error'>('connecting')
+  const [message, setMessage] = useState('')
+  const [sent, setSent] = useState(0)
 
-  if (options.username) payload.username = options.username
-  if (options.displayName) payload.displayName = options.displayName
-  if (options.amount) payload.amount = parseFloat(options.amount)
-  if (options.message) payload.message = options.message
-  if (options.currency) payload.currency = options.currency
-  if (options.platform) payload.platform = options.platform as ComponentTriggerPayload['platform']
-  if (options.tier) payload.tier = parseInt(options.tier, 10)
-  if (options.months) payload.months = parseInt(options.months, 10)
-  if (options.type) payload.type = options.type
+  useEffect(() => {
+    const ws = new WebSocket(`ws://localhost:${WS_PORT}`)
 
-  // Format amount if present
-  if (payload.amount && !payload.formattedAmount) {
-    const currency = payload.currency || 'USD'
-    payload.formattedAmount = new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency,
-    }).format(payload.amount)
-  }
+    ws.on('open', async () => {
+      setStatus('sending')
 
-  return payload
-}
+      for (let i = 0; i < events.length; i++) {
+        const { eventType, payload, delay = 500 } = events[i]
 
-function buildChatPayload(options: Record<string, string>): ChatMessagePayload {
-  const platform = (options.platform || 'twitch') as ChatMessagePayload['context']['platform']
-  const username = options.username || 'TestUser'
+        const eventMessage = {
+          type: 'event',
+          event: eventType,
+          payload,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: 'cli',
+          },
+        }
 
-  return {
-    type: 'chat_message',
-    context: {
-      platform,
-      channelId: 'test-channel',
-      channelName: 'TestChannel',
-      messageId: `msg-${Date.now()}`,
-      timestamp: new Date().toISOString(),
-    },
-    user: {
-      id: `user-${username}`,
-      username,
-      displayName: options.displayName || username,
-      color: options.color || '#FF6B6B',
-    },
-    message: {
-      text: options.message || 'Test message',
-    },
-    userStatus: {
-      isModerator: options.mod === 'true',
-      isSubscriber: options.sub === 'true',
-      isVip: options.vip === 'true',
-    },
-  }
+        ws.send(JSON.stringify(eventMessage))
+        setSent(i + 1)
+
+        if (i < events.length - 1 && delay > 0) {
+          await new Promise((resolve) => setTimeout(resolve, delay))
+        }
+      }
+
+      setStatus('success')
+      setMessage(`Sent ${events.length} events`)
+
+      setTimeout(() => {
+        ws.close()
+        process.exit(0)
+      }, 100)
+    })
+
+    ws.on('error', (err) => {
+      setStatus('error')
+      setMessage(`Failed to connect: ${err.message}. Is the dev server running?`)
+      setTimeout(() => process.exit(1), 100)
+    })
+
+    return () => {
+      ws.close()
+    }
+  }, [events])
+
+  return (
+    <Box padding={1}>
+      {status === 'connecting' && (
+        <>
+          <Text color="yellow">
+            <Spinner type="dots" />
+          </Text>
+          <Text> Connecting to dev server...</Text>
+        </>
+      )}
+      {status === 'sending' && (
+        <>
+          <Text color="yellow">
+            <Spinner type="dots" />
+          </Text>
+          <Text>
+            {' '}
+            Sending events... ({sent}/{events.length})
+          </Text>
+        </>
+      )}
+      {status === 'success' && <Text color="green">✓ {message}</Text>}
+      {status === 'error' && <Text color="red">✖ {message}</Text>}
+    </Box>
+  )
 }
 
 // Main test command
-export const testCommand = new Command('test')
-  .description('Send test events to the dev server')
+export const testCommand = new Command('test').description('Send test events to the dev server')
 
 // test trigger
 testCommand
   .command('trigger')
-  .description('Send a component trigger event (donation, follow, etc.)')
-  .option('-u, --username <name>', 'Username', 'TestUser')
-  .option('-d, --display-name <name>', 'Display name')
-  .option('-a, --amount <number>', 'Amount for donations')
-  .option('-m, --message <text>', 'Message content')
-  .option('-c, --currency <code>', 'Currency code', 'USD')
-  .option('-p, --platform <platform>', 'Platform (twitch, youtube, kick)', 'twitch')
-  .option('-t, --type <type>', 'Event type (donation, follow, subscription)')
-  .option('--tier <number>', 'Subscription tier (1, 2, 3)')
-  .option('--months <number>', 'Subscription months')
+  .description('Send a component trigger event')
+  .option('-d, --data <json>', 'Custom JSON payload', '{}')
   .action((options) => {
-    const payload = buildTriggerPayload(options)
+    let customData = {}
+    try {
+      customData = JSON.parse(options.data)
+    } catch {
+      console.error('Invalid JSON for --data')
+      process.exit(1)
+    }
+    const payload = createTriggerPayload(customData)
     render(<TestUI eventType="component_trigger" payload={payload} />)
   })
 
@@ -180,17 +213,95 @@ testCommand
 testCommand
   .command('chat')
   .description('Send a chat message event')
-  .option('-u, --username <name>', 'Username', 'TestViewer')
-  .option('-d, --display-name <name>', 'Display name')
-  .option('-m, --message <text>', 'Message text', 'Hello from CLI!')
-  .option('-p, --platform <platform>', 'Platform', 'twitch')
-  .option('--color <hex>', 'Username color', '#FF6B6B')
-  .option('--mod', 'User is moderator')
-  .option('--sub', 'User is subscriber')
-  .option('--vip', 'User is VIP')
+  .option('-p, --platform <platform>', 'Platform (twitch, youtube, kick)', 'twitch')
   .action((options) => {
-    const payload = buildChatPayload(options)
+    let payload
+    switch (options.platform) {
+      case 'youtube':
+        payload = createYouTubeChatPayload()
+        break
+      case 'kick':
+        payload = createKickChatPayload()
+        break
+      default:
+        payload = createTwitchChatPayload()
+    }
     render(<TestUI eventType="chat_message" payload={payload} />)
+  })
+
+// test sub - subscription events
+testCommand
+  .command('sub')
+  .description('Send a subscription event')
+  .option('-p, --platform <platform>', 'Platform (twitch, youtube, kick)', 'twitch')
+  .option('-t, --tier <number>', 'Subscription tier (1, 2, 3) - Twitch only', '1')
+  .option('-g, --gift', 'Gift subscription')
+  .option('-r, --resub', 'Re-subscription (Twitch only)')
+  .option('-m, --months <number>', 'Months subscribed (for resub)', '12')
+  .action((options) => {
+    let payload
+    const platform = options.platform || 'twitch'
+
+    if (platform === 'twitch') {
+      if (options.gift) {
+        payload = createTwitchGiftSubPayload()
+      } else if (options.resub) {
+        payload = createTwitchResubPayload(parseInt(options.months, 10) || 12)
+      } else {
+        const tier = parseInt(options.tier, 10) as 1 | 2 | 3
+        payload = createTwitchSubPayload(tier || 1)
+      }
+    } else if (platform === 'youtube') {
+      payload = createYouTubeMemberPayload()
+    } else if (platform === 'kick') {
+      if (options.gift) {
+        payload = createKickGiftSubPayload()
+      } else {
+        payload = createKickSubPayload()
+      }
+    } else {
+      payload = createTwitchSubPayload(1)
+    }
+
+    render(<TestUI eventType={'subscription_event' as EventType} payload={payload} />)
+  })
+
+// test bits
+testCommand
+  .command('bits')
+  .description('Send a Twitch bits event')
+  .option('-a, --amount <number>', 'Amount of bits', '100')
+  .action((options) => {
+    const amount = parseInt(options.amount, 10) || 100
+    const payload = createBitsPayload(amount)
+    render(<TestUI eventType={'monetary_event' as EventType} payload={payload} />)
+  })
+
+// test follow
+testCommand
+  .command('follow')
+  .description('Send a Twitch follow event')
+  .action(() => {
+    const payload = createFollowPayload()
+    render(<TestUI eventType={'engagement_event' as EventType} payload={payload} />)
+  })
+
+// test all-chat - sends all test events like merchant "Test Chat" button
+testCommand
+  .command('all-chat')
+  .description('Send all test events (chat, bits, sub, follow) with delays - like merchant Test Chat button')
+  .option('-d, --delay <ms>', 'Delay between events in ms', '500')
+  .action((options) => {
+    const delay = parseInt(options.delay, 10) || 500
+    const payloads = getAllTestChatPayloads()
+
+    const events = payloads.map((payload) => ({
+      eventType: (payload as { type: string }).type as EventType,
+      payload,
+      delay,
+    }))
+
+    render(<MultiEventUI events={events} />)
   })
 
 // test mount
@@ -198,16 +309,8 @@ testCommand
   .command('mount')
   .description('Send a component mount event')
   .action(() => {
-    render(
-      <TestUI
-        eventType="component_mount"
-        payload={{
-          componentId: 'dev-component',
-          type: 'alert',
-          timestamp: Date.now(),
-        }}
-      />
-    )
+    const payload = createMountPayload()
+    render(<TestUI eventType="component_mount" payload={payload} />)
   })
 
 // test unmount
@@ -215,16 +318,8 @@ testCommand
   .command('unmount')
   .description('Send a component unmount event')
   .action(() => {
-    render(
-      <TestUI
-        eventType="component_unmount"
-        payload={{
-          componentId: 'dev-component',
-          type: 'alert',
-          timestamp: Date.now(),
-        }}
-      />
-    )
+    const payload = createUnmountPayload()
+    render(<TestUI eventType="component_unmount" payload={payload} />)
   })
 
 // test update
