@@ -263,7 +263,7 @@ testCommand
       payload = createTwitchSubPayload(1)
     }
 
-    render(<TestUI eventType={'subscription_event' as EventType} payload={payload} />)
+    render(<TestUI eventType="chat_message" payload={payload} />)
   })
 
 // test bits
@@ -274,7 +274,7 @@ testCommand
   .action((options) => {
     const amount = parseInt(options.amount, 10) || 100
     const payload = createBitsPayload(amount)
-    render(<TestUI eventType={'monetary_event' as EventType} payload={payload} />)
+    render(<TestUI eventType="chat_message" payload={payload} />)
   })
 
 // test follow
@@ -283,7 +283,7 @@ testCommand
   .description('Send a Twitch follow event')
   .action(() => {
     const payload = createFollowPayload()
-    render(<TestUI eventType={'engagement_event' as EventType} payload={payload} />)
+    render(<TestUI eventType="chat_message" payload={payload} />)
   })
 
 // test all-chat - sends all test events like merchant "Test Chat" button
