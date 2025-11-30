@@ -1,6 +1,6 @@
 {
   "name": "@eeko/cli",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "CLI for local Eeko widget development",
   "author": "Eeko",
   "license": "MIT",
