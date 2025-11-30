@@ -39,6 +39,7 @@ function isFullHtmlDocument(html: string): boolean {
 
 /**
  * Wrap widget HTML content in a full document for development
+ * Uses module script to import CSS so Vite can transform template variables
  */
 function wrapWidgetHtml(widgetHtml: string, wsPort: number): string {
   const sdkScript = getLocalDevAdapterScript(wsPort)
@@ -49,8 +50,8 @@ function wrapWidgetHtml(widgetHtml: string, wsPort: number): string {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Widget Preview</title>
-  <link rel="stylesheet" href="./style.css">
   <script>${sdkScript}</script>
+  <script type="module">import './style.css';</script>
 </head>
 <body>
 ${widgetHtml}
