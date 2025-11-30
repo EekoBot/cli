@@ -9,6 +9,7 @@
  * - eeko login   Login to Eeko
  * - eeko logout  Logout from Eeko
  * - eeko whoami  Show current logged in user
+ * - eeko release Create a new release for your component
  */
 
 import { Command } from 'commander'
@@ -22,6 +23,7 @@ import { buildCommand } from './commands/build.js'
 import { loginCommand } from './commands/login.js'
 import { logoutCommand } from './commands/logout.js'
 import { whoamiCommand } from './commands/whoami.js'
+import { releaseCommand } from './commands/release.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const pkg = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf-8'))
@@ -41,6 +43,7 @@ program.addCommand(buildCommand)
 program.addCommand(loginCommand)
 program.addCommand(logoutCommand)
 program.addCommand(whoamiCommand)
+program.addCommand(releaseCommand)
 
 // Parse CLI arguments
 program.parse()

@@ -9,6 +9,9 @@ export const AUTH_CONFIG = {
     url: 'https://anhqzhxhtjqtzgkyaosw.supabase.co',
     anonKey: 'sb_publishable_u-Bjm5ph-8KQHr0n7590UA_-PRB7dBY',
   },
+  api: {
+    baseUrl: 'https://api.eeko.app',
+  },
   auth: {
     redirectPortStart: 3000,
     redirectPortEnd: 3010,
