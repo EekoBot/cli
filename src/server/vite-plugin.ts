@@ -4,11 +4,17 @@
  * Starts Vite to serve widget files with HMR
  * Wraps widget HTML in a full document for development
  * Injects the LocalDevAdapter into the page
+ * Performs template variable replacement using @eeko/sdk
  */
 
 import { createServer, type ViteDevServer } from 'vite'
 import path from 'path'
 import fs from 'fs'
+import {
+  TemplateEngine,
+  loadFieldConfig,
+  type FieldConfig,
+} from '@eeko/sdk/template/node'
 
 export interface DevServerOptions {
   port: number
@@ -54,6 +60,23 @@ ${widgetHtml}
 }
 
 /**
+ * Load field.json configuration if it exists
+ */
+async function loadTemplateConfig(cwd: string): Promise<FieldConfig | null> {
+  const fieldJsonPath = path.join(cwd, 'field.json')
+  if (!fs.existsSync(fieldJsonPath)) {
+    return null
+  }
+
+  try {
+    return await loadFieldConfig(cwd)
+  } catch (err) {
+    console.warn('[Dev] Failed to load field.json:', err)
+    return null
+  }
+}
+
+/**
  * Start the Vite dev server with SDK injection
  */
 export async function startDevServer(options: DevServerOptions): Promise<DevServer> {
@@ -69,6 +92,16 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
     console.warn('[Dev] Run `eeko init` to create a new widget')
   }
 
+  // Load field.json configuration for template processing
+  const fieldConfig = await loadTemplateConfig(cwd)
+  const templateEngine = fieldConfig
+    ? new TemplateEngine(fieldConfig.globalConfig)
+    : null
+
+  if (templateEngine) {
+    console.log('[Dev] Template engine initialized with field.json config')
+  }
+
   const server = await createServer({
     root: cwd,
     server: {
@@ -80,18 +113,38 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
       {
         name: 'eeko-widget-wrapper',
         transformIndexHtml(html) {
+          // Process template variables in HTML
+          let processedHtml = html
+          if (templateEngine) {
+            processedHtml = templateEngine.processHTML(html)
+          }
+
           // Check if this is already a full HTML document
-          if (isFullHtmlDocument(html)) {
+          if (isFullHtmlDocument(processedHtml)) {
             // Legacy full document - just inject SDK into <head>
             const sdkScript = getLocalDevAdapterScript(wsPort)
-            return html.replace(
+            return processedHtml.replace(
               '<head>',
               `<head><script>${sdkScript}</script>`
             )
           }
 
           // Widget content only - wrap in full document
-          return wrapWidgetHtml(html, wsPort)
+          return wrapWidgetHtml(processedHtml, wsPort)
+        },
+        transform(code, id) {
+          // Process template variables in CSS and JS files
+          if (!templateEngine) return code
+
+          if (id.endsWith('.css')) {
+            return templateEngine.processCSS(code)
+          }
+
+          if (id.endsWith('.js') || id.endsWith('.ts')) {
+            return templateEngine.processJS(code)
+          }
+
+          return code
         },
       },
     ],
