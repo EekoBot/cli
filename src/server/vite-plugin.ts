@@ -3,7 +3,7 @@
  *
  * Starts Vite to serve widget files with HMR
  * Wraps widget HTML in a full document for development
- * Injects the LocalDevAdapter into the page
+ * Injects the shared @eeko/sdk runtime bridge (with WebSocket dev transport)
  * Performs template variable replacement using @eeko/sdk
  */
 
@@ -15,6 +15,7 @@ import {
   loadFieldConfig,
   type FieldConfig,
 } from '@eeko/sdk/template/node'
+import { RUNTIME_BRIDGE_JS } from '@eeko/sdk/runtime-bridge'
 
 export interface DevServerOptions {
   port: number
@@ -42,15 +43,13 @@ function isFullHtmlDocument(html: string): boolean {
  * Uses module script to import CSS so Vite can transform template variables
  */
 function wrapWidgetHtml(widgetHtml: string, wsPort: number): string {
-  const sdkScript = getLocalDevAdapterScript(wsPort)
-
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Widget Preview</title>
-  <script>${sdkScript}</script>
+  ${devScriptTags(wsPort)}
   <script type="module">import './style.css';</script>
 </head>
 <body>
@@ -58,6 +57,16 @@ ${widgetHtml}
   <script src="./script.js"></script>
 </body>
 </html>`
+}
+
+/**
+ * Produce the two script tags that initialise the SDK bridge in dev mode:
+ *   1. Set `window.__EEKO_DEV__` so the bridge picks the WebSocket transport.
+ *   2. The bridge IIFE itself (shared with production widget-host).
+ */
+function devScriptTags(wsPort: number): string {
+  return `<script>window.__EEKO_DEV__={wsUrl:"ws://localhost:${wsPort}"};</script>
+  <script>${RUNTIME_BRIDGE_JS}</script>`
 }
 
 /**
@@ -122,11 +131,10 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
 
           // Check if this is already a full HTML document
           if (isFullHtmlDocument(processedHtml)) {
-            // Legacy full document - just inject SDK into <head>
-            const sdkScript = getLocalDevAdapterScript(wsPort)
+            // Legacy full document - inject dev config + shared bridge into <head>
             return processedHtml.replace(
               '<head>',
-              `<head><script>${sdkScript}</script>`
+              `<head>${devScriptTags(wsPort)}`
             )
           }
 
@@ -176,196 +184,3 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
   }
 }
 
-/**
- * Generate the LocalDevAdapter script that gets injected into the widget
- */
-function getLocalDevAdapterScript(wsPort: number): string {
-  return `
-// Eeko Local Dev Adapter
-(function() {
-  const WS_URL = 'ws://localhost:${wsPort}';
-
-  // Event type enum
-  const EVENT_TYPES = [
-    'component_trigger',
-    'component_update',
-    'component_sync',
-    'component_mount',
-    'component_unmount',
-    'chat_message',
-    'variable_updated'
-  ];
-
-  class LocalDevAdapter {
-    constructor() {
-      this.listeners = new Map();
-      this.state = {
-        componentId: 'dev-component',
-        userId: 'dev-user',
-        globalConfig: {},
-        variantConfig: {},
-      };
-      this.isInitialized = false;
-      this.ws = null;
-      this.reconnectAttempts = 0;
-      this.maxReconnectAttempts = 10;
-
-      // Initialize listener maps
-      EVENT_TYPES.forEach(type => {
-        this.listeners.set(type, new Set());
-      });
-
-      this.connect();
-    }
-
-    connect() {
-      try {
-        this.ws = new WebSocket(WS_URL);
-
-        this.ws.onopen = () => {
-          console.log('[EekoSDK:Dev] Connected to dev server');
-          this.reconnectAttempts = 0;
-          this.isInitialized = true;
-        };
-
-        this.ws.onmessage = (event) => {
-          try {
-            const message = JSON.parse(event.data);
-            this.handleMessage(message);
-          } catch (err) {
-            console.error('[EekoSDK:Dev] Failed to parse message:', err);
-          }
-        };
-
-        this.ws.onerror = (err) => {
-          console.error('[EekoSDK:Dev] WebSocket error');
-        };
-
-        this.ws.onclose = () => {
-          console.log('[EekoSDK:Dev] Disconnected from dev server');
-          this.isInitialized = false;
-          this.attemptReconnect();
-        };
-      } catch (err) {
-        console.error('[EekoSDK:Dev] Failed to connect:', err);
-        this.attemptReconnect();
-      }
-    }
-
-    attemptReconnect() {
-      if (this.reconnectAttempts < this.maxReconnectAttempts) {
-        this.reconnectAttempts++;
-        const delay = Math.min(1000 * this.reconnectAttempts, 5000);
-        console.log('[EekoSDK:Dev] Reconnecting in ' + delay + 'ms...');
-        setTimeout(() => this.connect(), delay);
-      }
-    }
-
-    handleMessage(message) {
-      switch (message.type) {
-        case 'event':
-          if (message.event && message.payload !== undefined) {
-            this._emit(message.event, message.payload);
-          }
-          break;
-
-        case 'state':
-          if (message.state) {
-            this._setState(message.state);
-          }
-          break;
-
-        case 'command':
-          this.handleCommand(message);
-          break;
-      }
-    }
-
-    handleCommand(message) {
-      switch (message.command) {
-        case 'init':
-          this._initialize(message.state || {});
-          break;
-        case 'reset':
-          this.reset();
-          break;
-        case 'disconnect':
-          this.ws?.close();
-          break;
-      }
-    }
-
-    // Public API
-    on(event, handler) {
-      const handlers = this.listeners.get(event);
-      if (handlers) {
-        handlers.add(handler);
-        console.log('[EekoSDK:Dev] Registered listener for:', event);
-      } else {
-        console.warn('[EekoSDK:Dev] Unknown event type:', event);
-      }
-    }
-
-    off(event, handler) {
-      const handlers = this.listeners.get(event);
-      if (handlers) {
-        handlers.delete(handler);
-        console.log('[EekoSDK:Dev] Removed listener for:', event);
-      }
-    }
-
-    getState() {
-      return { ...this.state };
-    }
-
-    isReady() {
-      return this.isInitialized && this.ws?.readyState === WebSocket.OPEN;
-    }
-
-    // Internal methods
-    _emit(event, data) {
-      const handlers = this.listeners.get(event);
-      if (handlers && handlers.size > 0) {
-        console.log('[EekoSDK:Dev] Emitting', event, 'to', handlers.size, 'listener(s)');
-        handlers.forEach(handler => {
-          try {
-            handler(data);
-          } catch (err) {
-            console.error('[EekoSDK:Dev] Error in', event, 'handler:', err);
-          }
-        });
-      }
-    }
-
-    _setState(newState) {
-      this.state = { ...this.state, ...newState };
-      console.log('[EekoSDK:Dev] State updated:', this.state);
-    }
-
-    _initialize(initialState) {
-      this.state = { ...this.state, ...initialState };
-      this.isInitialized = true;
-      console.log('[EekoSDK:Dev] Initialized with state:', this.state);
-    }
-
-    reset() {
-      this.listeners.forEach(handlers => handlers.clear());
-      EVENT_TYPES.forEach(type => {
-        this.listeners.set(type, new Set());
-      });
-      this.state = {
-        componentId: 'dev-component',
-        userId: 'dev-user',
-        globalConfig: {},
-        variantConfig: {},
-      };
-      this.isInitialized = false;
-    }
-  }
-
-  // Create and expose the SDK
-  window.eekoSDK = new LocalDevAdapter();
-  console.log('[EekoSDK:Dev] SDK available on window.eekoSDK');
-})();
-`
-}
