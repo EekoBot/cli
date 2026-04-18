@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-04-18
+
+### Added
+- `eeko publish` — commits local widget files (`index.html`, `styles.css`, `script.js`, `widget.json`) to your Eeko component's Cloudflare Artifacts repo via the server-mediated `POST /api/merchant/components/:id/commit` endpoint. No git push token ever touches your machine.
+- `eeko.config.json` — ties a local widget directory to a specific merchant component. Supports optional `apiHost` override.
+- `eeko init` now prompts which merchant component the directory is for (fetched from your Eeko account) and scaffolds a canonical four-file widget layout plus `eeko.config.json`.
+
+### Changed
+- Scaffolded starter files now use canonical names (`styles.css`, `widget.json`) instead of legacy (`style.css`, `field.json`).
+
+### Removed
+- `eeko release` — posted to deleted `/api/merchant/components/:id/releases` and `/unreleased-tags` endpoints. Superseded by `eeko publish` + the new Artifacts-backed versioning flow (git tags + branches on the per-component repo).
+- `src/utils/git.ts` — unused after the release command was removed.
+
 ## [0.1.1] - 2024-11-29
 
 ### Changed
@@ -28,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Interactive keyboard shortcuts in dev mode (1-4 for test events)
 - Automatic port selection when defaults are in use
 
-[Unreleased]: https://github.com/EekoBot/cli/compare/0.1.1...HEAD
+[Unreleased]: https://github.com/EekoBot/cli/compare/0.4.0...HEAD
+[0.4.0]: https://github.com/EekoBot/cli/compare/0.1.1...0.4.0
 [0.1.1]: https://github.com/EekoBot/cli/compare/0.1.0...0.1.1
 [0.1.0]: https://github.com/EekoBot/cli/releases/tag/0.1.0
