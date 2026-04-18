@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@eeko/sdk':
-        specifier: ^0.1.5
-        version: 0.1.5
+        specifier: ^0.3.0
+        version: 0.3.0
       '@supabase/supabase-js':
         specifier: ^2.86.0
         version: 2.86.0
@@ -76,8 +76,8 @@ packages:
     resolution: {integrity: sha512-3yWxPTq3UQ/FY9p1ErPxIyfT64elWaMvM9lIHnaqpyft63tkxodF5aUElYHrdisWve5cETkh1+KBw1yJuW0aRw==}
     engines: {node: '>=14.13.1'}
 
-  '@eeko/sdk@0.1.5':
-    resolution: {integrity: sha512-36SWG9RjLVdu3herNUcPZM/eecwUIgXDAMbINv5FTyu107F4JcOnMrCqYfqcLwT34wkocXrMAetmcqLzmiHxhg==}
+  '@eeko/sdk@0.3.0':
+    resolution: {integrity: sha512-2NuWEL8Xgz2P3wB3rLSClIzRW7kr6G0noQESH6BsvDUl5py9vtK8IoEHSE6K1uYlpOsBV9HhLpIuSEWHbyuALQ==}
     engines: {node: '>=18.0.0'}
 
   '@esbuild/aix-ppc64@0.25.12':
@@ -1130,7 +1130,7 @@ snapshots:
       ansi-styles: 6.2.3
       is-fullwidth-code-point: 4.0.0
 
-  '@eeko/sdk@0.1.5': {}
+  '@eeko/sdk@0.3.0': {}
 
   '@esbuild/aix-ppc64@0.25.12':
     optional: true
