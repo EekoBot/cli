@@ -6,14 +6,14 @@
 
 import { AUTH_CONFIG } from '../auth/config.js'
 
-const API_BASE = AUTH_CONFIG.api.baseUrl
+const DEFAULT_API_BASE = AUTH_CONFIG.api.baseUrl
 
 interface ApiError {
   error: string
   code?: string
 }
 
-interface MerchantComponent {
+export interface MerchantComponent {
   id: string
   merchantId: string
   title: string
@@ -23,55 +23,32 @@ interface MerchantComponent {
   githubRepoName: string | null
   sourceType: string
   isPublic: boolean
-  currentReleaseId: string | null
 }
 
-interface GitHubRelease {
-  tagName: string
-  name: string
-  isPrerelease: boolean
-  publishedAt: string
+export interface CommitResult {
+  ok: true
+  commitSha: string
+  ref: string
 }
 
-interface ComponentRelease {
-  id: string
-  componentId: string
-  version: string
-  changelog: string | null
-  isPrerelease: boolean
-  githubTag: string | null
-  createdAt: string
+interface CommitInput {
+  files: Record<string, string>
+  message?: string
+  ref?: string
 }
 
-interface CreateReleaseData {
-  version: string
-  githubTag: string
-  changelog?: string
-  isPrerelease?: boolean
-}
-
-interface MarketplaceItem {
-  id: string
-  component_id: string
-  version: number
-  version_label: string
-  name: string
-}
-
-/**
- * Make an authenticated API request
- */
 async function apiRequest<T>(
+  apiBase: string,
   path: string,
   token: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const url = `${API_BASE}${path}`
+  const url = `${apiBase}${path}`
 
   const response = await fetch(url, {
     ...options,
     headers: {
-      'Authorization': `Bearer ${token}`,
+      Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
       ...options.headers,
     },
@@ -91,9 +68,11 @@ async function apiRequest<T>(
  * Get all merchant components for the authenticated user
  */
 export async function getMerchantComponents(
-  token: string
+  token: string,
+  apiBase: string = DEFAULT_API_BASE
 ): Promise<MerchantComponent[]> {
   const data = await apiRequest<{ components: MerchantComponent[] }>(
+    apiBase,
     '/api/merchant/components',
     token
   )
@@ -101,92 +80,23 @@ export async function getMerchantComponents(
 }
 
 /**
- * Get GitHub releases for a repository
+ * Commit widget files to the component's Artifacts repo.
+ * Server overlays the provided files merge-style — any file not in
+ * `files` is left untouched at the target ref.
  */
-export async function getGitHubReleases(
-  token: string,
-  owner: string,
-  repo: string
-): Promise<GitHubRelease[]> {
-  const data = await apiRequest<{ releases: GitHubRelease[] }>(
-    `/api/github/repos/${owner}/${repo}/releases`,
-    token
-  )
-  return data.releases
-}
-
-/**
- * Get unreleased GitHub tags for a component
- * Returns only tags that haven't been released yet
- */
-export async function getUnreleasedTags(
-  token: string,
-  componentId: string
-): Promise<GitHubRelease[]> {
-  const data = await apiRequest<{ tags: GitHubRelease[] }>(
-    `/api/merchant/components/${componentId}/unreleased-tags`,
-    token
-  )
-  return data.tags
-}
-
-/**
- * Get existing releases for a component
- */
-export async function getComponentReleases(
-  token: string,
-  componentId: string
-): Promise<ComponentRelease[]> {
-  const data = await apiRequest<{ releases: ComponentRelease[]; currentReleaseId?: string }>(
-    `/api/merchant/components/${componentId}/releases`,
-    token
-  )
-  return data.releases
-}
-
-/**
- * Create a new release for a component
- */
-export async function createRelease(
+export async function commitComponentCode(
   token: string,
   componentId: string,
-  data: CreateReleaseData
-): Promise<{ release: ComponentRelease; message: string }> {
-  return apiRequest<{ success: boolean; release: ComponentRelease; message: string }>(
-    `/api/merchant/components/${componentId}/releases`,
+  input: CommitInput,
+  apiBase: string = DEFAULT_API_BASE
+): Promise<CommitResult> {
+  return apiRequest<CommitResult>(
+    apiBase,
+    `/api/merchant/components/${componentId}/commit`,
     token,
     {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(input),
     }
   )
-}
-
-/**
- * Publish component to marketplace
- */
-export async function publishToMarketplace(
-  token: string,
-  componentId: string,
-  changelog?: string
-): Promise<{ item: MarketplaceItem; message: string }> {
-  return apiRequest<{ success: boolean; item: MarketplaceItem; message: string }>(
-    '/api/marketplace/publish',
-    token,
-    {
-      method: 'POST',
-      body: JSON.stringify({
-        componentId,
-        changelog,
-      }),
-    }
-  )
-}
-
-export type {
-  MerchantComponent,
-  GitHubRelease,
-  ComponentRelease,
-  CreateReleaseData,
-  MarketplaceItem,
 }

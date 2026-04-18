@@ -4,20 +4,16 @@ CLI for local Eeko widget development. Build, preview, and test widgets locally 
 
 ## Quick Start (npx)
 
-Create a new widget project without installing globally:
-
 ```bash
-npx @eeko/cli init
+npx @eeko/cli login
+npx @eeko/cli init        # pick a merchant component, scaffold a widget directory
 cd my-widget
 pnpm install
-pnpm eeko dev
+pnpm eeko dev             # local preview on localhost
+pnpm eeko publish         # commit to your Eeko component's Artifacts repo
 ```
 
-This will:
-1. Prompt you to select a template
-2. Create a new directory with widget files and `package.json`
-3. Install `@eeko/cli` and dependencies
-4. Start the dev server with hot reload
+`init` writes an `eeko.config.json` tying this directory to a specific merchant component on your account. `publish` reads the four canonical files (`index.html`, `styles.css`, `script.js`, `widget.json`) and posts them to the server-mediated `/commit` endpoint — the per-repo Artifacts push token never leaves Eeko's backend.
 
 ## Installation
 
@@ -96,19 +92,35 @@ pnpm eeko test update --data='{"count": 5}'
 
 ### `eeko init`
 
-Create a new widget project from a template.
+Scaffold a new widget directory linked to a merchant component on your Eeko account.
 
 ```bash
-pnpm eeko init                           # Interactive template selection
-pnpm eeko init EekoBot/template-alert    # Clone from GitHub repo
-pnpm eeko init user/custom-template      # Clone from custom repo
+pnpm eeko init
 ```
 
-Available templates:
-- `blank` - Empty starter template
-- `EekoBot/template-alert` - Donation/follow alerts
-- `EekoBot/template-chat-overlay` - Chat messages display
-- `EekoBot/template-goal-bar` - Progress bar widget
+You'll be prompted to pick which merchant component this directory is for (fetched from your account). `init` writes:
+
+```
+my-widget/
+├── eeko.config.json  # { componentId, apiHost? }
+├── widget.json       # manifest
+├── index.html
+├── styles.css
+├── script.js
+└── package.json
+```
+
+Don't delete `eeko.config.json` — it's what `eeko publish` reads to know which component to commit to.
+
+### `eeko publish`
+
+Commit the local widget files to your component's Cloudflare Artifacts repo.
+
+```bash
+pnpm eeko publish
+```
+
+Reads `index.html`, `styles.css`, `script.js`, `widget.json` from the current directory and posts them to `${apiHost}/api/merchant/components/:componentId/commit`. Prints the commit SHA and dashboard preview URL on success.
 
 ### `eeko build`
 
@@ -118,20 +130,16 @@ Validate widget structure before deployment.
 pnpm eeko build
 ```
 
-Validates:
-- Required files exist (index.html, style.css, script.js, field.json)
-- field.json has valid schema with `fields` array
-- All JSON files are parseable
-
 ## Widget Structure
 
 ```
 my-widget/
-├── index.html       # Widget markup (content only, no <html>/<body>)
-├── style.css        # Styles
-├── script.js        # SDK event handlers
-├── field.json       # Configuration schema
-└── package.json     # Project dependencies
+├── eeko.config.json  # componentId tying this directory to an Eeko component
+├── widget.json       # manifest (fields, globalConfig, variantConfig, behavior)
+├── index.html        # widget markup (content only, no <html>/<body>)
+├── styles.css        # styles
+├── script.js         # SDK event handlers
+└── package.json      # project dependencies
 ```
 
 ### index.html
@@ -145,21 +153,26 @@ Widget HTML should contain only the widget content, not a full HTML document. Th
 </div>
 ```
 
-### field.json Schema
+### widget.json Schema
 
 ```json
 {
   "fields": [
     {
       "key": "backgroundColor",
-      "label": "Background Color",
+      "label": "Background color",
       "type": "color",
       "scope": "global",
-      "defaultValue": "#1a1a1a"
+      "default": "#1a1a1a"
     }
-  ]
+  ],
+  "globalConfig": { "backgroundColor": "#1a1a1a" },
+  "variantConfig": {},
+  "behavior": { "duration_ms": 5000 }
 }
 ```
+
+See [Widget Authoring docs](https://docs.eeko.app/docs/widget-authoring) for the full manifest reference.
 
 ### SDK Usage
 
