@@ -1,0 +1,34 @@
+{
+  "name": "Chat overlay",
+  "componentType": "chat",
+  "fields": [
+    {
+      "key": "maxMessages",
+      "label": "Max messages shown",
+      "type": "number",
+      "scope": "global",
+      "defaultValue": 8
+    },
+    {
+      "key": "fontColor",
+      "label": "Text colour",
+      "type": "color",
+      "scope": "global",
+      "defaultValue": "#f9f9f9"
+    },
+    {
+      "key": "accentColor",
+      "label": "Name colour",
+      "type": "color",
+      "scope": "global",
+      "defaultValue": "#b6ff00"
+    }
+  ],
+  "globalConfig": {
+    "maxMessages": 8,
+    "fontColor": "#f9f9f9",
+    "accentColor": "#b6ff00"
+  },
+  "variantConfig": {},
+  "behavior": {}
+}

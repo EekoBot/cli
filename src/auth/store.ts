@@ -1,17 +1,30 @@
 /**
  * Auth Session Store
  *
- * Stores and retrieves JWT session from ~/.eeko/auth.json
+ * Persists the identity-service session to ~/.eeko/auth.json (mode 0600).
+ *
+ * The durable credential is the short-lived JWT (`access_token`) delivered by
+ * identity-service's /auth/bounce after a magic-link verify. `refresh_token`
+ * holds the optional durable better-auth session token (loopback-only) used
+ * for silent refresh; logins from before durable tokens lack it.
  */
 
 import { homedir } from 'os'
 import { join } from 'path'
-import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync } from 'fs'
+import {
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  existsSync,
+  unlinkSync,
+  chmodSync,
+} from 'fs'
 import { AUTH_CONFIG } from './config.js'
 
 export interface StoredSession {
   access_token: string
-  refresh_token: string
+  /** Durable better-auth session token for silent refresh (may be absent). */
+  refresh_token?: string
   expires_at: number
   user: {
     id: string
@@ -57,8 +70,8 @@ export function loadSessionSync(): StoredSession | null {
     const data = readFileSync(path, 'utf-8')
     const session = JSON.parse(data) as StoredSession
 
-    // Basic validation
-    if (!session.access_token || !session.refresh_token || !session.user) {
+    // Basic validation — the durable refresh_token is optional.
+    if (!session.access_token || !session.user?.id) {
       return null
     }
 
@@ -69,12 +82,18 @@ export function loadSessionSync(): StoredSession | null {
 }
 
 /**
- * Save session to disk
+ * Save session to disk (owner-only, mode 0600 — it holds a bearer token).
  */
 export function saveSession(session: StoredSession): void {
   ensureAuthDir()
   const path = getAuthPath()
-  writeFileSync(path, JSON.stringify(session, null, 2), 'utf-8')
+  writeFileSync(path, JSON.stringify(session, null, 2), { encoding: 'utf-8', mode: 0o600 })
+  // writeFileSync's mode only applies on create; enforce on existing files too.
+  try {
+    chmodSync(path, 0o600)
+  } catch {
+    // best-effort (e.g. unsupported on the platform)
+  }
 }
 
 /**

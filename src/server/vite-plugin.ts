@@ -1,25 +1,24 @@
 /**
  * Vite Dev Server with SDK Injection
  *
- * Starts Vite to serve widget files with HMR
- * Wraps widget HTML in a full document for development
- * Injects the shared @eeko/sdk runtime bridge (with WebSocket dev transport)
- * Performs template variable replacement using @eeko/sdk
+ * Serves the widget files with HMR, mirroring widget-host's serve-time shell:
+ *   - Phase-1 template substitution via @eeko/sdk TemplateEngine (globals into
+ *     HTML; globals+variant into CSS/JS — variant HTML tokens stay literal for
+ *     the bridge's Phase-2 DOM walk)
+ *   - injects `window.__EEKO_INIT__` (real configs) + `window.__EEKO_DEV__`
+ *     (WebSocket transport) + the shared RUNTIME_BRIDGE_JS bridge
  */
 
-import { createServer, type ViteDevServer } from 'vite'
+import { createServer } from 'vite'
 import path from 'path'
 import fs from 'fs'
-import {
-  TemplateEngine,
-  loadFieldConfig,
-  type FieldConfig,
-} from '@eeko/sdk/template/node'
-import { RUNTIME_BRIDGE_JS } from '@eeko/sdk/runtime-bridge'
+import { TemplateEngine } from '@eeko/sdk/template/node'
+import { devHeadScripts, type InitState } from './widget-document.js'
 
 export interface DevServerOptions {
   port: number
   wsPort: number
+  init: InitState
   onReady?: (actualPort: number, actualWsPort: number) => void
 }
 
@@ -39,18 +38,19 @@ function isFullHtmlDocument(html: string): boolean {
 }
 
 /**
- * Wrap widget HTML content in a full document for development
- * Uses module script to import CSS so Vite can transform template variables
+ * Wrap widget-only HTML in a full document. The canonical `styles.css` and
+ * `script.js` are referenced so Vite's `transform` hook can substitute their
+ * template variables (Phase-1), matching what widget-host inlines.
  */
-function wrapWidgetHtml(widgetHtml: string, wsPort: number): string {
+function wrapWidgetHtml(widgetHtml: string, headScripts: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Widget Preview</title>
-  ${devScriptTags(wsPort)}
-  <script type="module">import './style.css';</script>
+  ${headScripts}
+  <script type="module">import './styles.css';</script>
 </head>
 <body>
 ${widgetHtml}
@@ -60,57 +60,24 @@ ${widgetHtml}
 }
 
 /**
- * Produce the two script tags that initialise the SDK bridge in dev mode:
- *   1. Set `window.__EEKO_DEV__` so the bridge picks the WebSocket transport.
- *   2. The bridge IIFE itself (shared with production widget-host).
- */
-function devScriptTags(wsPort: number): string {
-  return `<script>window.__EEKO_DEV__={wsUrl:"ws://localhost:${wsPort}"};</script>
-  <script>${RUNTIME_BRIDGE_JS}</script>`
-}
-
-/**
- * Load field.json configuration if it exists
- */
-async function loadTemplateConfig(cwd: string): Promise<FieldConfig | null> {
-  const fieldJsonPath = path.join(cwd, 'field.json')
-  if (!fs.existsSync(fieldJsonPath)) {
-    return null
-  }
-
-  try {
-    return await loadFieldConfig(cwd)
-  } catch (err) {
-    console.warn('[Dev] Failed to load field.json:', err)
-    return null
-  }
-}
-
-/**
- * Start the Vite dev server with SDK injection
+ * Start the Vite dev server with SDK injection + Phase-1 substitution.
  */
 export async function startDevServer(options: DevServerOptions): Promise<DevServer> {
-  const { port, wsPort, onReady } = options
+  const { port, wsPort, init, onReady } = options
 
-  // Check if widget files exist
   const cwd = process.cwd()
-  const indexPath = path.join(cwd, 'index.html')
-  const hasIndex = fs.existsSync(indexPath)
-
-  if (!hasIndex) {
+  if (!fs.existsSync(path.join(cwd, 'index.html'))) {
     console.warn('[Dev] No index.html found in current directory')
     console.warn('[Dev] Run `eeko init` to create a new widget')
   }
 
-  // Load field.json configuration for template processing
-  const fieldConfig = await loadTemplateConfig(cwd)
-  const templateEngine = fieldConfig
-    ? new TemplateEngine(fieldConfig.globalConfig)
-    : null
+  const wsUrl = `ws://127.0.0.1:${wsPort}`
+  const headScripts = devHeadScripts(init, wsUrl)
 
-  if (templateEngine) {
-    console.log('[Dev] Template engine initialized with field.json config')
-  }
+  // Two engines mirror widget-host: globals-only for HTML (variant tokens stay
+  // literal for Phase-2), globals+variant for CSS/JS.
+  const htmlEngine = new TemplateEngine(init.globalConfig)
+  const assetEngine = new TemplateEngine({ ...init.globalConfig, ...init.variantConfig })
 
   const server = await createServer({
     root: cwd,
@@ -123,53 +90,35 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
       {
         name: 'eeko-widget-wrapper',
         transformIndexHtml(html) {
-          // Process template variables in HTML
-          let processedHtml = html
-          if (templateEngine) {
-            processedHtml = templateEngine.processHTML(html)
-          }
+          const processedHtml = htmlEngine.processHTML(html)
 
-          // Check if this is already a full HTML document
           if (isFullHtmlDocument(processedHtml)) {
-            // Legacy full document - inject dev config + shared bridge into <head>
-            return processedHtml.replace(
-              '<head>',
-              `<head>${devScriptTags(wsPort)}`
-            )
+            // Inject the bridge scripts into the existing <head>.
+            return processedHtml.replace('<head>', `<head>\n  ${headScripts}`)
           }
 
-          // Widget content only - wrap in full document
-          return wrapWidgetHtml(processedHtml, wsPort)
+          // Widget content only — wrap in a full document.
+          return wrapWidgetHtml(processedHtml, headScripts)
         },
         transform(code, id) {
-          // Process template variables in CSS and JS files
-          if (!templateEngine) return code
-
           if (id.endsWith('.css')) {
-            return templateEngine.processCSS(code)
+            return assetEngine.processCSS(code)
           }
-
           if (id.endsWith('.js') || id.endsWith('.ts')) {
-            return templateEngine.processJS(code)
+            return assetEngine.processJS(code)
           }
-
           return code
         },
       },
     ],
-    optimizeDeps: {
-      exclude: [],
-    },
     logLevel: 'silent', // Suppress Vite's own logging
   })
 
   await server.listen()
 
-  // Get the actual port Vite is using
   const actualPort = server.config.server.port || port
   console.log(`[Vite] Server listening on port ${actualPort}`)
 
-  // Call onReady callback with actual port
   if (onReady) {
     onReady(actualPort, wsPort)
   }
@@ -183,4 +132,3 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
     wsPort,
   }
 }
-

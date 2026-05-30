@@ -30,8 +30,8 @@ function WhoamiUI() {
         return
       }
 
-      // Check if session needs refresh
-      if (sessionNeedsRefresh(session)) {
+      // Check if session needs refresh (and we have a durable token for it)
+      if (sessionNeedsRefresh(session) && session.refresh_token) {
         try {
           const refreshed = await refreshSession(session.refresh_token)
           if (refreshed) {

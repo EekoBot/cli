@@ -1,0 +1,53 @@
+{
+  "name": "Alert",
+  "componentType": "alert",
+  "fields": [
+    {
+      "key": "username",
+      "label": "Username",
+      "type": "text",
+      "scope": "variant",
+      "defaultValue": "Someone"
+    },
+    {
+      "key": "message",
+      "label": "Message",
+      "type": "text",
+      "scope": "variant",
+      "defaultValue": "just triggered the alert!"
+    },
+    {
+      "key": "accentColor",
+      "label": "Accent colour",
+      "type": "color",
+      "scope": "global",
+      "defaultValue": "#b6ff00"
+    },
+    {
+      "key": "backgroundColor",
+      "label": "Background",
+      "type": "color",
+      "scope": "global",
+      "defaultValue": "#040f0f"
+    },
+    {
+      "key": "durationMs",
+      "label": "On-screen duration (ms)",
+      "type": "number",
+      "scope": "global",
+      "defaultValue": 5000
+    }
+  ],
+  "globalConfig": {
+    "accentColor": "#b6ff00",
+    "backgroundColor": "#040f0f",
+    "durationMs": 5000
+  },
+  "variantConfig": {
+    "username": "Someone",
+    "message": "just triggered the alert!"
+  },
+  "behavior": {
+    "displayDuration": 5000
+  }
+}

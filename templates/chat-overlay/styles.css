@@ -1,0 +1,43 @@
+* {
+  margin: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background: transparent;
+}
+
+.chat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  max-width: 460px;
+}
+
+.msg {
+  font-size: 16px;
+  color: {fontColor};
+  line-height: 1.4;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  animation: msg-in 0.25s ease forwards;
+}
+
+@keyframes msg-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.msg .name {
+  font-weight: 700;
+  color: {accentColor};
+  margin-right: 6px;
+}

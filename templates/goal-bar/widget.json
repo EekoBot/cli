@@ -1,0 +1,50 @@
+{
+  "name": "Goal bar",
+  "componentType": "overlay",
+  "fields": [
+    {
+      "key": "goalTitle",
+      "label": "Goal title",
+      "type": "text",
+      "scope": "global",
+      "defaultValue": "Sub goal"
+    },
+    {
+      "key": "variableName",
+      "label": "Tracked variable",
+      "type": "text",
+      "scope": "global",
+      "defaultValue": "subs"
+    },
+    {
+      "key": "goalTarget",
+      "label": "Target",
+      "type": "number",
+      "scope": "global",
+      "defaultValue": 100
+    },
+    {
+      "key": "barColor",
+      "label": "Bar colour",
+      "type": "color",
+      "scope": "global",
+      "defaultValue": "#b6ff00"
+    },
+    {
+      "key": "trackColor",
+      "label": "Track colour",
+      "type": "color",
+      "scope": "global",
+      "defaultValue": "#1a1a2e"
+    }
+  ],
+  "globalConfig": {
+    "goalTitle": "Sub goal",
+    "variableName": "subs",
+    "goalTarget": 100,
+    "barColor": "#b6ff00",
+    "trackColor": "#1a1a2e"
+  },
+  "variantConfig": {},
+  "behavior": {}
+}

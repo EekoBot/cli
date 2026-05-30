@@ -11,7 +11,7 @@ import Spinner from 'ink-spinner'
 import open from 'open'
 import { startAuthServer } from '../auth/server.js'
 import { loadSessionSync, saveSession, isSessionValid } from '../auth/store.js'
-import { getUser } from '../auth/client.js'
+import { verifyToken, buildSessionFromToken } from '../auth/client.js'
 
 type LoginState = 'checking' | 'starting' | 'waiting' | 'success' | 'error'
 
@@ -44,29 +44,28 @@ function LoginUI() {
         setState('waiting')
         setMessage('Waiting for authentication... (check your browser)')
 
-        const tokens = await waitForTokens()
+        const result = await waitForTokens()
+
+        if (result.error) {
+          throw new Error(result.error)
+        }
+        if (!result.token) {
+          throw new Error('No authentication token received')
+        }
 
         setMessage('Verifying session...')
 
-        const user = await getUser(tokens.access_token)
-        if (!user) {
-          throw new Error('Failed to get user info')
+        // JWKS-verify the JWT before trusting anything that landed on loopback.
+        const payload = await verifyToken(result.token)
+        if (!payload?.sub) {
+          throw new Error('Token verification failed')
         }
 
-        // Calculate expiry (1 hour from now, Supabase default)
-        const expiresAt = Math.floor(Date.now() / 1000) + 3600
+        const session = buildSessionFromToken(result.token)
+        if (result.session) session.refresh_token = result.session
+        saveSession(session)
 
-        saveSession({
-          access_token: tokens.access_token,
-          refresh_token: tokens.refresh_token,
-          expires_at: expiresAt,
-          user: {
-            id: user.id,
-            email: user.email,
-          },
-        })
-
-        setEmail(user.email)
+        setEmail(session.user.email)
         setState('success')
         setMessage('Authentication successful')
         close()
