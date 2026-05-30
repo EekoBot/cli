@@ -14,13 +14,7 @@ import { render, Box, Text, useApp } from 'ink'
 import Spinner from 'ink-spinner'
 import { readFileSync, existsSync } from 'fs'
 import { join } from 'path'
-import {
-  loadSessionSync,
-  isSessionValid,
-  sessionNeedsRefresh,
-  saveSession,
-} from '../auth/store.js'
-import { refreshSession } from '../auth/client.js'
+import { getValidAccessToken } from '../auth/session.js'
 import { loadEekoConfig } from '../utils/config.js'
 import { commitDraft } from '../api/client.js'
 import { isGitRepo, stageAndCommit, pushHead } from '../utils/git.js'
@@ -62,16 +56,9 @@ function PublishUI() {
     if (state !== 'preparing') return
 
     async function run() {
-      let session = loadSessionSync()
-      if (session && !isSessionValid(session) && session.refresh_token) {
-        const refreshed = await refreshSession(session.refresh_token)
-        if (refreshed) {
-          saveSession(refreshed)
-          session = refreshed
-        }
-      }
-      if (!session) {
-        setError('Not logged in. Run: eeko login')
+      const token = await getValidAccessToken()
+      if (!token) {
+        setError('Not logged in or session expired. Run: eeko login')
         setState('error')
         return
       }
@@ -101,7 +88,7 @@ function PublishUI() {
           // No-git fallback — server-mediated commit.
           const files = readWidgetFiles(cwd)
           const r = await commitDraft(
-            session.access_token,
+            token,
             config.componentId,
             files,
             message,

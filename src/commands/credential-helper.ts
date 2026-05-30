@@ -10,8 +10,7 @@
  */
 
 import { Command } from 'commander'
-import { loadSessionSync, sessionNeedsRefresh, saveSession } from '../auth/store.js'
-import { refreshSession } from '../auth/client.js'
+import { getValidAccessToken } from '../auth/session.js'
 import { mintGitCredentials } from '../api/client.js'
 import { loadEekoConfig } from '../utils/config.js'
 import { AUTH_CONFIG } from '../auth/config.js'
@@ -49,19 +48,6 @@ function componentIdFromPath(p: string | undefined): string | null {
   return null
 }
 
-async function validAccessToken(): Promise<string | null> {
-  let session = loadSessionSync()
-  if (!session) return null
-  if (sessionNeedsRefresh(session) && session.refresh_token) {
-    const refreshed = await refreshSession(session.refresh_token)
-    if (refreshed) {
-      saveSession(refreshed)
-      session = refreshed
-    }
-  }
-  return session.access_token
-}
-
 async function handleGet(input: Record<string, string>): Promise<void> {
   const componentId = componentIdFromPath(input.path)
   if (!componentId) {
@@ -69,9 +55,11 @@ async function handleGet(input: Record<string, string>): Promise<void> {
     process.exit(0)
   }
 
-  const token = await validAccessToken()
+  // Returns null for an expired session with no refresh token, so we tell git
+  // we have nothing (it fails cleanly) rather than handing over a dead token.
+  const token = await getValidAccessToken()
   if (!token) {
-    process.stderr.write('eeko: not logged in — run `eeko login`\n')
+    process.stderr.write('eeko: not logged in or session expired — run `eeko login`\n')
     process.exit(1)
   }
 

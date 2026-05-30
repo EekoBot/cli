@@ -16,8 +16,7 @@ import Spinner from 'ink-spinner'
 import path from 'path'
 import { existsSync } from 'fs'
 import { writeFile } from 'fs/promises'
-import { loadSessionSync, sessionNeedsRefresh, saveSession } from '../auth/store.js'
-import { refreshSession } from '../auth/client.js'
+import { getValidAccessToken } from '../auth/session.js'
 import { createComponent, getComponentGit } from '../api/client.js'
 import { AUTH_CONFIG } from '../auth/config.js'
 import { writeEekoConfig } from '../utils/config.js'
@@ -78,19 +77,6 @@ interface InitOptions {
   apiHost?: string
 }
 
-async function ensureToken(): Promise<string | null> {
-  let session = loadSessionSync()
-  if (!session) return null
-  if (sessionNeedsRefresh(session) && session.refresh_token) {
-    const refreshed = await refreshSession(session.refresh_token)
-    if (refreshed) {
-      saveSession(refreshed)
-      session = refreshed
-    }
-  }
-  return session.access_token
-}
-
 async function createAndScaffold(
   token: string,
   opts: { name: string; template: TemplateName; type: string; apiHost?: string },
@@ -145,7 +131,7 @@ function InitUI({ initial }: { initial: InitOptions }) {
 
   useEffect(() => {
     if (step !== 'checking-auth') return
-    ensureToken().then((t) => {
+    getValidAccessToken().then((t) => {
       if (!t) {
         setError('Not logged in. Run: eeko login')
         setStep('error')
