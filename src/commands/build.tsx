@@ -10,6 +10,7 @@ import { render, Box, Text } from 'ink'
 import Spinner from 'ink-spinner'
 import fs from 'fs/promises'
 import path from 'path'
+import { validateManifest } from '@eeko/sdk/template'
 
 interface ValidationResult {
   file: string
@@ -17,7 +18,7 @@ interface ValidationResult {
   message?: string
 }
 
-const REQUIRED_FILES = ['index.html', 'style.css', 'script.js', 'field.json']
+const REQUIRED_FILES = ['index.html', 'styles.css', 'script.js', 'widget.json']
 
 function BuildUI() {
   const [results, setResults] = useState<ValidationResult[]>(
@@ -36,24 +37,24 @@ function BuildUI() {
           const filePath = path.join(process.cwd(), file)
           await fs.access(filePath)
 
-          // Additional validation for field.json
-          if (file === 'field.json') {
+          // Validate widget.json against the shared manifest schema, so a
+          // widget that validates locally validates on commit.
+          if (file === 'widget.json') {
             try {
               const content = await fs.readFile(filePath, 'utf-8')
-              const json = JSON.parse(content)
-
-              if (!json.fields || !Array.isArray(json.fields)) {
+              const parsed = JSON.parse(content)
+              const result = validateManifest(parsed)
+              if (!result.ok) {
                 newResults.push({
                   file,
                   status: 'error',
-                  message: 'Missing or invalid "fields" array',
+                  message: result.errors.join('; '),
                 })
                 errors = true
                 continue
               }
-
               newResults.push({ file, status: 'ok' })
-            } catch (parseErr) {
+            } catch {
               newResults.push({
                 file,
                 status: 'error',

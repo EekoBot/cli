@@ -14,14 +14,20 @@ import { render, Box, Text, useApp, useInput } from 'ink'
 import Spinner from 'ink-spinner'
 import { startDevServer, type DevServer } from '../server/vite-plugin.js'
 import { createDevWebSocketServer, type DevWebSocketServer } from '../server/ws-server.js'
+import { loadInitState } from '../server/widget-document.js'
+import { startLiveBridge, type LiveBridge } from '../server/live-bridge.js'
 import open from 'open'
 import { TestEventMenu } from '../components/TestEventMenu.js'
 import { findEventByShortcut, type TestEventDefinition } from '../test-events/index.js'
+import { loadEekoConfig } from '../utils/config.js'
+import { loadSessionSync } from '../auth/store.js'
+import { AUTH_CONFIG } from '../auth/config.js'
 
 interface DevUIProps {
   port: number
   wsPort: number
   autoOpen: boolean
+  live: boolean
 }
 
 interface EventLogEntry {
@@ -30,7 +36,7 @@ interface EventLogEntry {
   preview: string
 }
 
-function DevUI({ port, wsPort, autoOpen }: DevUIProps) {
+function DevUI({ port, wsPort, autoOpen, live }: DevUIProps) {
   const { exit } = useApp()
   const [serverStatus, setServerStatus] = useState<'starting' | 'ready' | 'error'>('starting')
   const [wsClients, setWsClients] = useState(0)
@@ -39,10 +45,12 @@ function DevUI({ port, wsPort, autoOpen }: DevUIProps) {
   const [actualPort, setActualPort] = useState(port)
   const [actualWsPort, setActualWsPort] = useState(wsPort)
   const [showEventMenu, setShowEventMenu] = useState(false)
+  const [liveStatus, setLiveStatus] = useState<string | null>(null)
 
   // Refs to hold server instances for cleanup
   const wsRef = React.useRef<DevWebSocketServer | null>(null)
   const serverRef = React.useRef<DevServer | null>(null)
+  const liveBridgeRef = React.useRef<LiveBridge | null>(null)
 
   // Send a test event
   const sendTestEvent = (eventDef: TestEventDefinition) => {
@@ -57,6 +65,7 @@ function DevUI({ port, wsPort, autoOpen }: DevUIProps) {
     if (showEventMenu) return
 
     if (input === 'q' || (key.ctrl && input === 'c')) {
+      liveBridgeRef.current?.close()
       wsRef.current?.close()
       serverRef.current?.close()
       exit()
@@ -84,8 +93,17 @@ function DevUI({ port, wsPort, autoOpen }: DevUIProps) {
 
     async function start() {
       try {
+        // Resolve identity for production parity (best-effort — falls back to
+        // dev placeholders if there's no eeko.config.json / session).
+        const cfg = loadEekoConfig()
+        const session = loadSessionSync()
+        const componentId = cfg?.componentId ?? 'dev-component'
+        const userId = session?.user?.id ?? 'dev-user'
+        const apiBase = cfg?.apiHost ?? AUTH_CONFIG.api.baseUrl
+        const init = await loadInitState(process.cwd(), { componentId, userId })
+
         // Start WebSocket server (finds available port automatically)
-        const ws = await createDevWebSocketServer(wsPort)
+        const ws = await createDevWebSocketServer(wsPort, init)
         if (!mounted) {
           ws.close()
           return
@@ -119,12 +137,13 @@ function DevUI({ port, wsPort, autoOpen }: DevUIProps) {
         const server = await startDevServer({
           port,
           wsPort: ws.port,
+          init,
           onReady: (serverPort) => {
             if (mounted) {
               setActualPort(serverPort)
               setServerStatus('ready')
               if (autoOpen) {
-                open(`http://localhost:${serverPort}`)
+                open(`http://127.0.0.1:${serverPort}`)
               }
             }
           },
@@ -137,6 +156,43 @@ function DevUI({ port, wsPort, autoOpen }: DevUIProps) {
         }
 
         serverRef.current = server
+
+        // Optional: bridge the developer's REAL Pusher events into the widget.
+        if (live) {
+          if (!session || !cfg) {
+            if (mounted) {
+              setLiveStatus('needs `eeko login` + an eeko.config.json (run from a widget dir)')
+            }
+          } else {
+            try {
+              const bridge = await startLiveBridge({
+                token: session.access_token,
+                componentId,
+                apiBase,
+                ref: 'draft',
+                ws,
+                onEvent: (event) => {
+                  if (mounted) {
+                    setEvents((prev) => [
+                      ...prev.slice(-9),
+                      { type: `live:${event}`, timestamp: new Date(), preview: '(live)' },
+                    ])
+                  }
+                },
+              })
+              liveBridgeRef.current = bridge
+              if (!mounted) {
+                bridge.close()
+              } else {
+                setLiveStatus(`subscribed (…${bridge.channels.widget.slice(-8)})`)
+              }
+            } catch (err) {
+              if (mounted) {
+                setLiveStatus(`error: ${err instanceof Error ? err.message : 'live bridge failed'}`)
+              }
+            }
+          }
+        }
       } catch (err) {
         console.error('[Dev] Error starting servers:', err)
         if (mounted) {
@@ -150,6 +206,7 @@ function DevUI({ port, wsPort, autoOpen }: DevUIProps) {
 
     return () => {
       mounted = false
+      liveBridgeRef.current?.close()
       wsRef.current?.close()
       serverRef.current?.close()
     }
@@ -214,6 +271,16 @@ function DevUI({ port, wsPort, autoOpen }: DevUIProps) {
           <Text dimColor> (port {actualWsPort})</Text>
         </Text>
       </Box>
+
+      {/* Live Bridge Status */}
+      {live && (
+        <Box>
+          <Text>
+            <Text color={liveStatus?.startsWith('subscribed') ? 'green' : 'yellow'}>●</Text> Live
+            events: <Text dimColor>{liveStatus ?? 'connecting…'}</Text>
+          </Text>
+        </Box>
+      )}
 
       {/* Event Log */}
       <Box flexDirection="column" marginTop={1}>
@@ -349,6 +416,7 @@ export const devCommand = new Command('dev')
   .option('-p, --port <number>', 'Dev server port', '3000')
   .option('-w, --ws-port <number>', 'WebSocket event port', '9876')
   .option('--no-open', 'Do not auto-open browser')
+  .option('--live', "Bridge your account's real Pusher events into the widget")
   .action((options) => {
     const port = validatePort(options.port, 'Port')
     const wsPort = validatePort(options.wsPort, 'WebSocket port')
@@ -358,6 +426,7 @@ export const devCommand = new Command('dev')
         port={port}
         wsPort={wsPort}
         autoOpen={options.open !== false}
+        live={options.live === true}
       />
     )
   })

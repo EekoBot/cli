@@ -7,6 +7,7 @@
 import { WebSocketServer, WebSocket } from 'ws'
 import { EventEmitter } from 'events'
 import type { EventType } from '@eeko/sdk'
+import { toEnvelope, type InitState } from './widget-document.js'
 
 export interface DevEventMessage {
   type: 'event' | 'state' | 'command'
@@ -23,7 +24,10 @@ export interface DevEventMessage {
 /**
  * Create a WebSocket server on an available port
  */
-export async function createDevWebSocketServer(startPort: number = 9876): Promise<DevWebSocketServer> {
+export async function createDevWebSocketServer(
+  startPort: number = 9876,
+  initState?: InitState
+): Promise<DevWebSocketServer> {
   const maxAttempts = 100
 
   for (let i = 0; i < maxAttempts; i++) {
@@ -35,7 +39,7 @@ export async function createDevWebSocketServer(startPort: number = 9876): Promis
 
         wss.once('listening', () => {
           console.log(`[WS] Server listening on port ${port}`)
-          resolve(new DevWebSocketServer(wss, port))
+          resolve(new DevWebSocketServer(wss, port, initState))
         })
 
         wss.once('error', (err) => {
@@ -62,11 +66,13 @@ export class DevWebSocketServer extends EventEmitter {
   private wss: WebSocketServer
   private clients: Set<WebSocket> = new Set()
   public readonly port: number
+  private initState?: InitState
 
-  constructor(wss: WebSocketServer, port: number) {
+  constructor(wss: WebSocketServer, port: number, initState?: InitState) {
     super()
     this.port = port
     this.wss = wss
+    this.initState = initState
 
     this.wss.on('error', (err) => {
       console.error('[WS] Server error:', err)
@@ -76,13 +82,15 @@ export class DevWebSocketServer extends EventEmitter {
       this.clients.add(ws)
       this.emit('client:connect', { count: this.clients.size })
 
-      // Send initial state
+      // Send initial state — real componentId/userId, but EMPTY configs: the
+      // real config values are seeded by the dev server's __EEKO_INIT__
+      // injection (mirrors IframeWidgetHost's eeko:init).
       this.sendToClient(ws, {
         type: 'command',
         command: 'init',
         state: {
-          componentId: 'dev-component',
-          userId: 'dev-user',
+          componentId: this.initState?.componentId ?? 'dev-component',
+          userId: this.initState?.userId ?? 'dev-user',
           globalConfig: {},
           variantConfig: {},
         },
@@ -109,11 +117,16 @@ export class DevWebSocketServer extends EventEmitter {
     })
   }
 
-  private handleMessage(message: DevEventMessage, ws: WebSocket) {
-    // Handle acknowledgments or other client->server messages
+  private handleMessage(message: DevEventMessage, _ws: WebSocket) {
+    // Re-broadcast client-sent events (e.g. `eeko test` from another terminal)
+    // to the widget(s), normalising to the wire envelope like emitEvent does so
+    // handlers receive the same shape as production.
     if (message.type === 'event') {
-      // Re-broadcast events from one client to all others
-      this.broadcast(message)
+      const normalised: DevEventMessage =
+        message.event !== undefined
+          ? { ...message, payload: toEnvelope(message.event, message.payload) }
+          : message
+      this.broadcast(normalised)
       this.emit('event', { type: message.event, payload: message.payload })
     }
   }
@@ -140,10 +153,12 @@ export class DevWebSocketServer extends EventEmitter {
    * Emit an SDK event to all connected widgets
    */
   emitEvent(event: EventType, payload: unknown) {
+    // Normalise to the `{type, context, payload}` wire envelope so the bridge's
+    // unwrap delivers the same shape handlers receive in production.
     const message: DevEventMessage = {
       type: 'event',
       event,
-      payload,
+      payload: toEnvelope(event, payload),
       metadata: {
         timestamp: new Date().toISOString(),
         source: 'cli',

@@ -1,6 +1,11 @@
 /**
- * eeko publish — commit local widget files to the component's
- * Cloudflare Artifacts repo via the server-mediated /commit endpoint.
+ * eeko publish — push local widget changes to your draft ref.
+ *
+ * If the directory is a git repo wired to your Eeko remote, this stages +
+ * commits any changes and `git push`es them to draft (the credential helper
+ * brokers the token). Otherwise it falls back to the server-mediated
+ * commit-draft endpoint. Either way the push triggers a preview refresh; run
+ * `eeko promote` to publish live.
  */
 
 import { Command } from 'commander'
@@ -9,11 +14,12 @@ import { render, Box, Text, useApp } from 'ink'
 import Spinner from 'ink-spinner'
 import { readFileSync, existsSync } from 'fs'
 import { join } from 'path'
-import { loadSessionSync, isSessionValid } from '../auth/store.js'
+import { getValidAccessToken } from '../auth/session.js'
 import { loadEekoConfig } from '../utils/config.js'
-import { commitComponentCode, type CommitResult } from '../api/client.js'
+import { commitDraft } from '../api/client.js'
+import { isGitRepo, stageAndCommit, pushHead } from '../utils/git.js'
 
-type PublishState = 'preparing' | 'committing' | 'done' | 'error'
+type PublishState = 'preparing' | 'publishing' | 'done' | 'error'
 
 const WIDGET_FILES = ['index.html', 'styles.css', 'script.js', 'widget.json']
 
@@ -22,12 +28,12 @@ function readWidgetFiles(cwd: string): Record<string, string> {
   const missing: string[] = []
 
   for (const name of WIDGET_FILES) {
-    const path = join(cwd, name)
-    if (!existsSync(path)) {
+    const filePath = join(cwd, name)
+    if (!existsSync(filePath)) {
       missing.push(name)
       continue
     }
-    files[name] = readFileSync(path, 'utf-8')
+    files[name] = readFileSync(filePath, 'utf-8')
   }
 
   if (missing.length > 0) {
@@ -44,55 +50,61 @@ function PublishUI() {
   const [state, setState] = useState<PublishState>('preparing')
   const [error, setError] = useState<string | null>(null)
   const [componentId, setComponentId] = useState<string | null>(null)
-  const [result, setResult] = useState<CommitResult | null>(null)
+  const [detail, setDetail] = useState<string>('')
 
   useEffect(() => {
     if (state !== 'preparing') return
 
-    const session = loadSessionSync()
-    if (!session || !isSessionValid(session)) {
-      setError('Not logged in. Run: eeko login')
-      setState('error')
-      return
-    }
+    async function run() {
+      const token = await getValidAccessToken()
+      if (!token) {
+        setError('Not logged in or session expired. Run: eeko login')
+        setState('error')
+        return
+      }
 
-    const config = loadEekoConfig()
-    if (!config) {
-      setError(
-        'No eeko.config.json found in current directory. Run `eeko init` or add one with {"componentId": "..."}'
-      )
-      setState('error')
-      return
-    }
+      const config = loadEekoConfig()
+      if (!config) {
+        setError('No eeko.config.json found. Run `eeko init` or `eeko clone` first.')
+        setState('error')
+        return
+      }
+      setComponentId(config.componentId)
 
-    let files: Record<string, string>
-    try {
-      files = readWidgetFiles(process.cwd())
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to read widget files')
-      setState('error')
-      return
-    }
+      const cwd = process.cwd()
+      const message = `eeko publish ${new Date().toISOString()}`
+      setState('publishing')
 
-    setComponentId(config.componentId)
-    setState('committing')
-
-    const message = `eeko publish ${new Date().toISOString()}`
-
-    commitComponentCode(
-      session.access_token,
-      config.componentId,
-      { files, message },
-      config.apiHost
-    )
-      .then((r) => {
-        setResult(r)
+      try {
+        if (await isGitRepo(cwd)) {
+          // Native git path — push to the Artifacts remote's draft ref.
+          const { committed } = await stageAndCommit(cwd, message)
+          const push = await pushHead(cwd, 'origin', 'draft')
+          if (push.code !== 0) {
+            throw new Error(push.stderr.trim() || 'git push failed')
+          }
+          setDetail(committed ? 'committed + pushed to draft' : 'pushed to draft (no new changes)')
+        } else {
+          // No-git fallback — server-mediated commit.
+          const files = readWidgetFiles(cwd)
+          const r = await commitDraft(
+            token,
+            config.componentId,
+            files,
+            message,
+            'draft',
+            config.apiHost
+          )
+          setDetail(`commit ${r.sha ?? r.commitSha ?? ''} → draft`)
+        }
         setState('done')
-      })
-      .catch((err) => {
+      } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to publish')
         setState('error')
-      })
+      }
+    }
+
+    run()
   }, [state])
 
   useEffect(() => {
@@ -110,26 +122,25 @@ function PublishUI() {
         </Text>
       </Box>
 
-      {(state === 'preparing' || state === 'committing') && (
+      {(state === 'preparing' || state === 'publishing') && (
         <Box>
           <Text color="yellow">
             <Spinner type="dots" />
           </Text>
           <Text>
             {' '}
-            {state === 'preparing' && 'Reading widget files...'}
-            {state === 'committing' && `Committing to component ${componentId}...`}
+            {state === 'preparing' && 'Preparing…'}
+            {state === 'publishing' && `Publishing to ${componentId}…`}
           </Text>
         </Box>
       )}
 
-      {state === 'done' && result && componentId && (
+      {state === 'done' && componentId && (
         <Box flexDirection="column">
-          <Text color="green">Published!</Text>
+          <Text color="green">✓ Published to draft</Text>
           <Box marginTop={1} flexDirection="column">
-            <Text dimColor>Commit: {result.commitSha}</Text>
-            <Text dimColor>Ref:    {result.ref}</Text>
-            <Text dimColor>Preview: https://{componentId}.widgets.eeko.app/</Text>
+            <Text dimColor>{detail}</Text>
+            <Text dimColor>Run `eeko promote` to publish live.</Text>
           </Box>
         </Box>
       )}
@@ -140,7 +151,7 @@ function PublishUI() {
 }
 
 export const publishCommand = new Command('publish')
-  .description('Publish local widget files to your Eeko component')
+  .description('Publish local widget changes to your draft ref')
   .action(() => {
     render(<PublishUI />)
   })

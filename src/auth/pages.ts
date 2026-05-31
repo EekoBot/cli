@@ -269,40 +269,32 @@ export function getSuccessPageHtml(): string {
     </div>
     <script>
       try {
-        // Extract tokens from URL fragment (after #)
-        const fragment = window.location.hash.substring(1);
-        const params = new URLSearchParams(fragment);
-        const accessToken = params.get('access_token');
-        const refreshToken = params.get('refresh_token');
+        // identity-service's /auth/bounce appends the short JWT (?token=) and
+        // the durable session token (?session=) to the redirect — usually in
+        // the query string, but check the fragment too for robustness.
+        var qs = new URLSearchParams(window.location.search);
+        var hash = new URLSearchParams(window.location.hash.substring(1));
+        var token = qs.get('token') || hash.get('token') || qs.get('access_token') || hash.get('access_token');
+        var session = qs.get('session') || hash.get('session');
+        var error = qs.get('error') || hash.get('error');
 
-        if (accessToken && refreshToken) {
-          // Send tokens back to the server
+        if (token || error) {
           fetch('/auth/tokens', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              access_token: accessToken,
-              refresh_token: refreshToken
-            })
-          }).catch(() => {
-            // Silent error handling
-          });
+            body: JSON.stringify({ token: token, session: session, error: error })
+          }).catch(function () { /* silent */ });
         } else {
-          // No tokens found - show error
+          // No token found - show error
           document.querySelector('.icon-wrapper').innerHTML = '<svg width="40" height="40" fill="white" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>';
           document.getElementById('statusText').textContent = 'Authentication failed';
           document.getElementById('statusText').className = 'error-text';
-          document.getElementById('infoText').textContent = 'No authentication tokens found. Please try again.';
+          document.getElementById('infoText').textContent = 'No authentication token found. Please try again.';
         }
 
-        setTimeout(() => {
-          window.close();
-        }, 5000);
-      } catch (error) {
-        // Silent error handling
-        setTimeout(() => {
-          window.close();
-        }, 5000);
+        setTimeout(function () { window.close(); }, 5000);
+      } catch (e) {
+        setTimeout(function () { window.close(); }, 5000);
       }
     </script>
   </body>

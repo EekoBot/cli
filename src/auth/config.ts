@@ -1,23 +1,33 @@
 /**
- * Auth Configuration
+ * Auth & CLI configuration.
  *
- * Supabase credentials and auth settings for the CLI.
+ * Authentication is against Eeko's identity-service (better-auth, magic-link)
+ * via the loopback `/auth/bounce` flow — the same mechanism the native-bridge
+ * uses. All values are overridable by env var for local/staging testing.
  */
 
 export const AUTH_CONFIG = {
-  supabase: {
-    url: 'https://anhqzhxhtjqtzgkyaosw.supabase.co',
-    anonKey: 'sb_publishable_u-Bjm5ph-8KQHr0n7590UA_-PRB7dBY',
+  identity: {
+    // identity-service base URL (JWKS + magic-link + /auth/bounce live here).
+    baseUrl: (process.env.EEKO_IDENTITY_URL || 'https://identity.eeko.app').replace(/\/$/, ''),
   },
   api: {
-    baseUrl: 'https://api.eeko.app',
+    // nexus-api base URL — the CLI's authed REST surface.
+    baseUrl: (process.env.EEKO_API_HOST || 'https://api.eeko.app').replace(/\/$/, ''),
   },
   auth: {
+    // Loopback redirect port range (RFC 8252 §7.3 / §8.3 — localhost IP literal).
     redirectPortStart: 3000,
     redirectPortEnd: 3010,
   },
   storage: {
     dir: '.eeko',
     file: 'auth.json',
+  },
+  pusher: {
+    // Public Pusher client key (safe to embed — it's in every browser bundle).
+    // Used by `eeko dev --live` to bridge the developer's real overlay events.
+    key: process.env.EEKO_PUSHER_KEY || 'fa66d0a5896f8ec1394c',
+    cluster: process.env.EEKO_PUSHER_CLUSTER || 'eu',
   },
 }
