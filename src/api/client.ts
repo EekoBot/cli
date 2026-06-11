@@ -17,6 +17,8 @@ export interface CreateComponentResult {
   success: boolean
   componentId: string
   instance: unknown
+  /** Present when the widget was created account-owned (the auto-attached catalog project). */
+  projectId?: string
 }
 
 export interface ComponentGitInfo {
@@ -27,6 +29,28 @@ export interface ComponentGitInfo {
   remote: string
   host: string
   refs: { draft: string; main: string }
+  owner?: { kind: 'user' | 'account'; id: string }
+}
+
+export interface EekoAccount {
+  id: string
+  slug: string
+  name: string
+  approval_status?: string
+}
+
+export interface AccountProject {
+  id: string
+  name: string
+  widget?: { id: string; name?: string; component_type?: string }
+}
+
+/** Match a merchant account by id or slug. */
+export function matchAccount(
+  accounts: EekoAccount[],
+  idOrSlug: string
+): EekoAccount | undefined {
+  return accounts.find((a) => a.id === idOrSlug || a.slug === idOrSlug)
 }
 
 export interface ComponentSource {
@@ -103,13 +127,46 @@ async function apiRequest<T>(
  */
 export async function createComponent(
   token: string,
-  input: { name: string; componentType?: string; isTriggerable?: boolean },
+  input: {
+    name: string
+    componentType?: string
+    isTriggerable?: boolean
+    /** Create the widget account-owned (membership-checked server-side). */
+    ownerKind?: 'user' | 'account'
+    ownerId?: string
+  },
   apiBase: string = DEFAULT_API_BASE
 ): Promise<CreateComponentResult> {
   return apiRequest<CreateComponentResult>(apiBase, '/api/components', token, {
     method: 'POST',
     body: JSON.stringify(input),
   })
+}
+
+/**
+ * List the merchant accounts the caller is a member of.
+ */
+export async function getAccounts(
+  token: string,
+  apiBase: string = DEFAULT_API_BASE
+): Promise<{ accounts: EekoAccount[] }> {
+  return apiRequest<{ accounts: EekoAccount[] }>(apiBase, '/api/accounts', token)
+}
+
+/**
+ * List an account's catalog projects. Projects carry `widget` when a
+ * user-component is attached.
+ */
+export async function listAccountProjects(
+  token: string,
+  accountId: string,
+  apiBase: string = DEFAULT_API_BASE
+): Promise<{ projects: AccountProject[] }> {
+  return apiRequest<{ projects: AccountProject[] }>(
+    apiBase,
+    `/api/accounts/${accountId}/projects`,
+    token
+  )
 }
 
 /**

@@ -9,6 +9,8 @@ import { join } from 'path'
 export interface EekoConfig {
   componentId: string
   apiHost?: string
+  /** Present when the widget is owned by a merchant account. */
+  accountId?: string
 }
 
 export const CONFIG_FILENAME = 'eeko.config.json'
@@ -26,6 +28,7 @@ export function loadEekoConfig(cwd: string = process.cwd()): EekoConfig | null {
     return {
       componentId: parsed.componentId,
       apiHost: parsed.apiHost,
+      accountId: parsed.accountId,
     }
   } catch {
     return null

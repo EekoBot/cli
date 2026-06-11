@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-06-11
+
+### Added
+- `eeko init --account <idOrSlug>` — create the widget under a merchant account you belong to (id or slug; membership is checked server-side). Without the flag, `init` now offers a picker ("Personal (your user)" first) when you belong to merchant accounts; with no accounts, behavior is unchanged.
+- `eeko clone --account <idOrSlug>` — the component id can now be omitted: the CLI lists the account's catalog widgets and lets you pick one to clone. Cloning an account-owned widget by id also records the owning account.
+- `eeko.config.json` gains an optional `accountId` field, written when the widget is account-owned. `eeko dev` shows `account: <id>` in its header when present.
+
+### Notes
+- Marketplace releases are cut in the merchant app; the CLI stops at draft/main (`eeko promote` is unchanged).
+
 ## [0.4.0] - 2026-04-18
 
 ### Added
@@ -42,7 +52,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Interactive keyboard shortcuts in dev mode (1-4 for test events)
 - Automatic port selection when defaults are in use
 
-[Unreleased]: https://github.com/EekoBot/cli/compare/0.4.0...HEAD
+[Unreleased]: https://github.com/EekoBot/cli/compare/0.6.0...HEAD
+[0.6.0]: https://github.com/EekoBot/cli/compare/0.5.0...0.6.0
 [0.4.0]: https://github.com/EekoBot/cli/compare/0.1.1...0.4.0
 [0.1.1]: https://github.com/EekoBot/cli/compare/0.1.0...0.1.1
 [0.1.0]: https://github.com/EekoBot/cli/releases/tag/0.1.0

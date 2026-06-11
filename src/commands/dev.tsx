@@ -46,6 +46,7 @@ function DevUI({ port, wsPort, autoOpen, live }: DevUIProps) {
   const [actualWsPort, setActualWsPort] = useState(wsPort)
   const [showEventMenu, setShowEventMenu] = useState(false)
   const [liveStatus, setLiveStatus] = useState<string | null>(null)
+  const [accountId, setAccountId] = useState<string | null>(null)
 
   // Refs to hold server instances for cleanup
   const wsRef = React.useRef<DevWebSocketServer | null>(null)
@@ -97,6 +98,7 @@ function DevUI({ port, wsPort, autoOpen, live }: DevUIProps) {
         // dev placeholders if there's no eeko.config.json / session).
         const cfg = loadEekoConfig()
         const session = loadSessionSync()
+        if (cfg?.accountId) setAccountId(cfg.accountId)
         const componentId = cfg?.componentId ?? 'dev-component'
         const userId = session?.user?.id ?? 'dev-user'
         const apiBase = cfg?.apiHost ?? AUTH_CONFIG.api.baseUrl
@@ -271,6 +273,13 @@ function DevUI({ port, wsPort, autoOpen, live }: DevUIProps) {
           <Text dimColor> (port {actualWsPort})</Text>
         </Text>
       </Box>
+
+      {/* Account ownership (when the widget is account-owned) */}
+      {accountId && (
+        <Box>
+          <Text dimColor>account: {accountId}</Text>
+        </Box>
+      )}
 
       {/* Live Bridge Status */}
       {live && (
