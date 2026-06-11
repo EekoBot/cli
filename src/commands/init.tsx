@@ -17,7 +17,13 @@ import path from 'path'
 import { existsSync } from 'fs'
 import { writeFile } from 'fs/promises'
 import { getValidAccessToken } from '../auth/session.js'
-import { createComponent, getComponentGit } from '../api/client.js'
+import {
+  createComponent,
+  getComponentGit,
+  getAccounts,
+  matchAccount,
+  type EekoAccount,
+} from '../api/client.js'
 import { AUTH_CONFIG } from '../auth/config.js'
 import { writeEekoConfig } from '../utils/config.js'
 import { cloneRepo, checkout, stageAndCommit } from '../utils/git.js'
@@ -28,6 +34,13 @@ import {
   isTemplateName,
   type TemplateName,
 } from '../utils/templates.js'
+
+/**
+ * Reserved `--account` value that forces the personal path and skips the
+ * account picker. Handled before matchAccount is ever consulted, so it wins
+ * even over a merchant account whose slug is literally "personal".
+ */
+const PERSONAL_SENTINEL = 'personal'
 
 function sanitizeProjectName(name: string): string {
   const sanitized = name
@@ -75,11 +88,18 @@ interface InitOptions {
   template?: TemplateName
   type?: string
   apiHost?: string
+  account?: string
 }
 
 async function createAndScaffold(
   token: string,
-  opts: { name: string; template: TemplateName; type: string; apiHost?: string },
+  opts: {
+    name: string
+    template: TemplateName
+    type: string
+    apiHost?: string
+    accountId?: string
+  },
   setStatus: (s: string) => void
 ): Promise<string> {
   const safeName = sanitizeProjectName(opts.name)
@@ -89,8 +109,18 @@ async function createAndScaffold(
   }
   const apiBase = opts.apiHost ?? AUTH_CONFIG.api.baseUrl
 
-  setStatus('Creating widget on your account…')
-  const created = await createComponent(token, { name: safeName, componentType: opts.type }, apiBase)
+  setStatus(
+    opts.accountId ? 'Creating widget on the merchant account…' : 'Creating widget on your account…'
+  )
+  const created = await createComponent(
+    token,
+    {
+      name: safeName,
+      componentType: opts.type,
+      ...(opts.accountId ? { ownerKind: 'account' as const, ownerId: opts.accountId } : {}),
+    },
+    apiBase
+  )
   const componentId = created.componentId
 
   setStatus('Resolving git remote…')
@@ -105,7 +135,7 @@ async function createAndScaffold(
 
   setStatus(`Scaffolding the ${opts.template} template…`)
   await scaffoldTemplate(opts.template, targetDir, safeName)
-  writeEekoConfig(targetDir, { componentId, apiHost: opts.apiHost })
+  writeEekoConfig(targetDir, { componentId, apiHost: opts.apiHost, accountId: opts.accountId })
   await writeFile(path.join(targetDir, 'package.json'), packageJson(safeName))
   await stageAndCommit(targetDir, `init: scaffold ${opts.template}`)
 
@@ -113,7 +143,15 @@ async function createAndScaffold(
   return targetDir
 }
 
-type Step = 'checking-auth' | 'selecting-template' | 'entering-name' | 'creating' | 'done' | 'error'
+type Step =
+  | 'checking-auth'
+  | 'resolving-account'
+  | 'selecting-account'
+  | 'selecting-template'
+  | 'entering-name'
+  | 'creating'
+  | 'done'
+  | 'error'
 
 function InitUI({ initial }: { initial: InitOptions }) {
   const { exit } = useApp()
@@ -124,33 +162,90 @@ function InitUI({ initial }: { initial: InitOptions }) {
   const [projectName, setProjectName] = useState(initial.name ?? '')
   const [status, setStatus] = useState('')
   const [targetDir, setTargetDir] = useState('')
+  const [accounts, setAccounts] = useState<EekoAccount[]>([])
+  const [accountId, setAccountId] = useState<string | undefined>(undefined)
+  const [accountsWarning, setAccountsWarning] = useState<string | null>(null)
 
   useInput((_input, key) => {
     if (key.escape) exit()
   })
 
+  /**
+   * Show the error state and exit non-zero. Ink's `exit()` without an Error
+   * resolves the process with code 0, so set exitCode explicitly.
+   */
+  const failAndExit = (message: string, delayMs = 3000) => {
+    setError(message)
+    setStep('error')
+    process.exitCode = 1
+    setTimeout(() => exit(), delayMs)
+  }
+
+  /** Past the account question — the pre-existing template/name flow. */
+  const advancePastAccount = () => {
+    if (initial.template && initial.name) setStep('creating')
+    else if (initial.template) setStep('entering-name')
+    else setStep('selecting-template')
+  }
+
   useEffect(() => {
     if (step !== 'checking-auth') return
     getValidAccessToken().then((t) => {
       if (!t) {
-        setError('Not logged in. Run: eeko login')
-        setStep('error')
-        setTimeout(() => exit(), 2000)
+        failAndExit('Not logged in. Run: eeko login', 2000)
         return
       }
       setToken(t)
-      if (initial.template && initial.name) setStep('creating')
-      else if (initial.template) setStep('entering-name')
-      else setStep('selecting-template')
+      setStep('resolving-account')
     })
   }, [step, exit])
+
+  useEffect(() => {
+    if (step !== 'resolving-account' || !token) return
+    // `--account personal` is a reserved sentinel: force the personal path
+    // and skip the account picker (and the accounts fetch) entirely. Handled
+    // before matchAccount so it wins even over a slug literally "personal".
+    if (initial.account && initial.account.toLowerCase() === PERSONAL_SENTINEL) {
+      advancePastAccount()
+      return
+    }
+    const apiBase = initial.apiHost ?? AUTH_CONFIG.api.baseUrl
+    getAccounts(token, apiBase)
+      .then(({ accounts: list }) => {
+        if (initial.account) {
+          const match = matchAccount(list, initial.account)
+          if (!match) {
+            failAndExit(
+              `No merchant account matching "${initial.account}" (check the id/slug and that you're a member)`
+            )
+            return
+          }
+          setAccountId(match.id)
+          advancePastAccount()
+        } else if (list.length >= 1) {
+          setAccounts(list)
+          setStep('selecting-account')
+        } else {
+          advancePastAccount()
+        }
+      })
+      .catch((err) => {
+        if (initial.account) {
+          failAndExit(
+            `Could not resolve merchant accounts: ${err instanceof Error ? err.message : String(err)}`
+          )
+          return
+        }
+        setAccountsWarning('Could not check merchant accounts; creating a personal widget.')
+        advancePastAccount()
+      })
+  }, [step, token, initial, exit])
 
   useEffect(() => {
     if (step !== 'creating' || !token) return
     const tmpl = template ?? initial.template
     if (!tmpl) {
-      setError('No template selected')
-      setStep('error')
+      failAndExit('No template selected')
       return
     }
     const name = projectName || slugify(tmpl)
@@ -161,6 +256,7 @@ function InitUI({ initial }: { initial: InitOptions }) {
         template: tmpl,
         type: initial.type ?? TEMPLATE_COMPONENT_TYPE[tmpl],
         apiHost: initial.apiHost,
+        accountId,
       },
       setStatus
     )
@@ -170,11 +266,9 @@ function InitUI({ initial }: { initial: InitOptions }) {
         setTimeout(() => exit(), 1500)
       })
       .catch((err) => {
-        setError(err instanceof Error ? err.message : String(err))
-        setStep('error')
-        setTimeout(() => exit(), 3000)
+        failAndExit(err instanceof Error ? err.message : String(err))
       })
-  }, [step, token, template, projectName, initial, exit])
+  }, [step, token, template, projectName, accountId, initial, exit])
 
   const handleTemplateSelect = (item: { value: string }) => {
     if (!isTemplateName(item.value)) return
@@ -202,6 +296,39 @@ function InitUI({ initial }: { initial: InitOptions }) {
             <Spinner type="dots" />
           </Text>
           <Text> Checking authentication…</Text>
+        </Box>
+      )}
+
+      {step === 'resolving-account' && (
+        <Box>
+          <Text color="yellow">
+            <Spinner type="dots" />
+          </Text>
+          <Text> Checking merchant accounts…</Text>
+        </Box>
+      )}
+
+      {accountsWarning && (
+        <Box>
+          <Text dimColor>{accountsWarning}</Text>
+        </Box>
+      )}
+
+      {step === 'selecting-account' && (
+        <Box flexDirection="column">
+          <Text>Create this widget under:</Text>
+          <Box marginTop={1}>
+            <SelectInput
+              items={[
+                { label: 'Personal (your user)', value: '' },
+                ...accounts.map((a) => ({ label: `${a.name} (${a.slug})`, value: a.id })),
+              ]}
+              onSelect={(item: { value: string }) => {
+                if (item.value) setAccountId(item.value)
+                advancePastAccount()
+              }}
+            />
+          </Box>
         </Box>
       )}
 
@@ -253,6 +380,13 @@ function InitUI({ initial }: { initial: InitOptions }) {
             <Text dimColor> eeko publish # push to draft</Text>
             <Text dimColor> eeko promote # publish live</Text>
           </Box>
+          {accountId && (
+            <Box marginTop={1}>
+              <Text dimColor>
+                Marketplace releases are cut in the merchant app — the CLI stops at draft/main.
+              </Text>
+            </Box>
+          )}
         </Box>
       )}
 
@@ -270,13 +404,32 @@ export const initCommand = new Command('init')
   .argument('[name]', 'Project / directory name')
   .option('-t, --template <name>', 'Starter template: alert | chat-overlay | goal-bar')
   .option('--type <componentType>', 'Component type for the new widget')
+  .option(
+    '--account <idOrSlug>',
+    "Create the widget under a merchant account you belong to. Pass 'personal' to skip the account picker and create a personal widget — 'personal' is reserved and always means your user, even if a merchant account's slug is literally 'personal'"
+  )
   .option('--api-host <url>', 'Override the nexus-api base URL')
-  .action((name: string | undefined, opts: { template?: string; type?: string; apiHost?: string }) => {
-    const template =
-      opts.template && isTemplateName(opts.template) ? opts.template : undefined
-    if (opts.template && !template) {
-      console.error(`Unknown template "${opts.template}". Options: ${TEMPLATES.join(', ')}`)
-      process.exit(1)
+  .action(
+    (
+      name: string | undefined,
+      opts: { template?: string; type?: string; account?: string; apiHost?: string }
+    ) => {
+      const template =
+        opts.template && isTemplateName(opts.template) ? opts.template : undefined
+      if (opts.template && !template) {
+        console.error(`Unknown template "${opts.template}". Options: ${TEMPLATES.join(', ')}`)
+        process.exit(1)
+      }
+      render(
+        <InitUI
+          initial={{
+            name,
+            template,
+            type: opts.type,
+            apiHost: opts.apiHost,
+            account: opts.account,
+          }}
+        />
+      )
     }
-    render(<InitUI initial={{ name, template, type: opts.type, apiHost: opts.apiHost }} />)
-  })
+  )

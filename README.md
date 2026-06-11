@@ -6,7 +6,7 @@ CLI for local Eeko widget development. Build, preview, and test widgets locally 
 
 ```bash
 npx @eeko/cli login
-npx @eeko/cli init        # pick a merchant component, scaffold a widget directory
+npx @eeko/cli init        # create a new widget and scaffold a directory for it
 cd my-widget
 pnpm install
 pnpm eeko dev             # local preview on localhost
@@ -92,17 +92,19 @@ pnpm eeko test update --data='{"count": 5}'
 
 ### `eeko init`
 
-Scaffold a new widget directory linked to a merchant component on your Eeko account.
+Create a new widget on your Eeko account and scaffold a local directory for it.
 
 ```bash
 pnpm eeko init
+pnpm eeko init --account my-shop                     # create the widget under a merchant account (id or slug)
+pnpm eeko init my-widget -t alert --account personal # fully non-interactive personal init
 ```
 
-You'll be prompted to pick which merchant component this directory is for (fetched from your account). `init` writes:
+You'll be prompted for a starter template and a project name (skip those prompts with `-t/--template` and a name argument). If you belong to merchant accounts, `init` also asks who should own the new widget — "Personal (your user)" or one of your accounts. `--account <idOrSlug>` skips that prompt (you must be a member of the account), and `--account personal` skips it by forcing the personal path — `personal` is reserved and always means your user, even if a merchant account's slug is literally `personal`. `init` writes:
 
 ```
 my-widget/
-├── eeko.config.json  # { componentId, apiHost? }
+├── eeko.config.json  # { componentId, apiHost?, accountId? }
 ├── widget.json       # manifest
 ├── index.html
 ├── styles.css
@@ -110,7 +112,20 @@ my-widget/
 └── package.json
 ```
 
+`accountId` is recorded when the widget is account-owned. Note that marketplace releases are cut in the merchant app; the CLI stops at draft/main.
+
 Don't delete `eeko.config.json` — it's what `eeko publish` reads to know which component to commit to.
+
+### `eeko clone`
+
+Clone an existing widget into a local git repo (draft branch checked out, credential helper wired).
+
+```bash
+pnpm eeko clone <componentId> [dir]
+pnpm eeko clone --account my-shop   # pick a widget from the account's catalog
+```
+
+With `--account <idOrSlug>` the component id can be omitted: the CLI lists the merchant account's catalog widgets and lets you pick one. Cloning an account-owned widget records `accountId` in `eeko.config.json`.
 
 ### `eeko publish`
 
