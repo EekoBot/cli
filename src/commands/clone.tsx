@@ -120,6 +120,15 @@ export const cloneCommand = new Command('clone')
         const accountIdOrSlug = opts.account
         if (!accountIdOrSlug) process.exit(1) // unreachable — guarded above
 
+        // The Ink picker needs raw-mode stdin; fail cleanly instead of
+        // letting Ink throw a raw-mode stack trace in non-TTY contexts.
+        if (!process.stdin.isTTY) {
+          console.error(
+            'The interactive widget picker requires a TTY; pass a componentId: eeko clone <componentId> [dir]'
+          )
+          process.exit(1)
+        }
+
         let accounts
         try {
           accounts = (await getAccounts(token, apiBase)).accounts
@@ -189,7 +198,13 @@ export const cloneCommand = new Command('clone')
 
       // Check out the draft working branch and link the directory.
       await checkout(targetDir, info.refs.draft)
-      const accountId = info.owner?.kind === 'account' ? info.owner.id : pickedAccountId
+      // Trust an explicit owner from the git endpoint over the picker
+      // fallback: a user-owned widget must not inherit pickedAccountId.
+      const accountId = info.owner
+        ? info.owner.kind === 'account'
+          ? info.owner.id
+          : undefined
+        : pickedAccountId
       writeEekoConfig(path.resolve(targetDir), {
         componentId: info.componentId,
         apiHost: opts.apiHost,

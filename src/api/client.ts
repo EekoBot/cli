@@ -45,12 +45,21 @@ export interface AccountProject {
   widget?: { id: string; name?: string; component_type?: string }
 }
 
-/** Match a merchant account by id or slug. */
+/**
+ * Match a merchant account by id or slug. Two passes: an exact id match wins
+ * over any slug collision; the slug comparison is case-insensitive.
+ *
+ * The `--account personal` sentinel is handled by callers BEFORE this is
+ * consulted — this function never treats "personal" specially.
+ */
 export function matchAccount(
   accounts: EekoAccount[],
   idOrSlug: string
 ): EekoAccount | undefined {
-  return accounts.find((a) => a.id === idOrSlug || a.slug === idOrSlug)
+  const byId = accounts.find((a) => a.id === idOrSlug)
+  if (byId) return byId
+  const slug = idOrSlug.toLowerCase()
+  return accounts.find((a) => a.slug.toLowerCase() === slug)
 }
 
 export interface ComponentSource {

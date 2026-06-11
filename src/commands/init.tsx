@@ -35,6 +35,13 @@ import {
   type TemplateName,
 } from '../utils/templates.js'
 
+/**
+ * Reserved `--account` value that forces the personal path and skips the
+ * account picker. Handled before matchAccount is ever consulted, so it wins
+ * even over a merchant account whose slug is literally "personal".
+ */
+const PERSONAL_SENTINEL = 'personal'
+
 function sanitizeProjectName(name: string): string {
   const sanitized = name
     .replace(/[\/\\]/g, '-')
@@ -163,6 +170,17 @@ function InitUI({ initial }: { initial: InitOptions }) {
     if (key.escape) exit()
   })
 
+  /**
+   * Show the error state and exit non-zero. Ink's `exit()` without an Error
+   * resolves the process with code 0, so set exitCode explicitly.
+   */
+  const failAndExit = (message: string, delayMs = 3000) => {
+    setError(message)
+    setStep('error')
+    process.exitCode = 1
+    setTimeout(() => exit(), delayMs)
+  }
+
   /** Past the account question — the pre-existing template/name flow. */
   const advancePastAccount = () => {
     if (initial.template && initial.name) setStep('creating')
@@ -174,9 +192,7 @@ function InitUI({ initial }: { initial: InitOptions }) {
     if (step !== 'checking-auth') return
     getValidAccessToken().then((t) => {
       if (!t) {
-        setError('Not logged in. Run: eeko login')
-        setStep('error')
-        setTimeout(() => exit(), 2000)
+        failAndExit('Not logged in. Run: eeko login', 2000)
         return
       }
       setToken(t)
@@ -186,17 +202,22 @@ function InitUI({ initial }: { initial: InitOptions }) {
 
   useEffect(() => {
     if (step !== 'resolving-account' || !token) return
+    // `--account personal` is a reserved sentinel: force the personal path
+    // and skip the account picker (and the accounts fetch) entirely. Handled
+    // before matchAccount so it wins even over a slug literally "personal".
+    if (initial.account && initial.account.toLowerCase() === PERSONAL_SENTINEL) {
+      advancePastAccount()
+      return
+    }
     const apiBase = initial.apiHost ?? AUTH_CONFIG.api.baseUrl
     getAccounts(token, apiBase)
       .then(({ accounts: list }) => {
         if (initial.account) {
           const match = matchAccount(list, initial.account)
           if (!match) {
-            setError(
+            failAndExit(
               `No merchant account matching "${initial.account}" (check the id/slug and that you're a member)`
             )
-            setStep('error')
-            setTimeout(() => exit(), 3000)
             return
           }
           setAccountId(match.id)
@@ -210,11 +231,9 @@ function InitUI({ initial }: { initial: InitOptions }) {
       })
       .catch((err) => {
         if (initial.account) {
-          setError(
+          failAndExit(
             `Could not resolve merchant accounts: ${err instanceof Error ? err.message : String(err)}`
           )
-          setStep('error')
-          setTimeout(() => exit(), 3000)
           return
         }
         setAccountsWarning('Could not check merchant accounts; creating a personal widget.')
@@ -226,8 +245,7 @@ function InitUI({ initial }: { initial: InitOptions }) {
     if (step !== 'creating' || !token) return
     const tmpl = template ?? initial.template
     if (!tmpl) {
-      setError('No template selected')
-      setStep('error')
+      failAndExit('No template selected')
       return
     }
     const name = projectName || slugify(tmpl)
@@ -248,9 +266,7 @@ function InitUI({ initial }: { initial: InitOptions }) {
         setTimeout(() => exit(), 1500)
       })
       .catch((err) => {
-        setError(err instanceof Error ? err.message : String(err))
-        setStep('error')
-        setTimeout(() => exit(), 3000)
+        failAndExit(err instanceof Error ? err.message : String(err))
       })
   }, [step, token, template, projectName, accountId, initial, exit])
 
@@ -388,7 +404,10 @@ export const initCommand = new Command('init')
   .argument('[name]', 'Project / directory name')
   .option('-t, --template <name>', 'Starter template: alert | chat-overlay | goal-bar')
   .option('--type <componentType>', 'Component type for the new widget')
-  .option('--account <idOrSlug>', 'Create the widget under a merchant account you belong to')
+  .option(
+    '--account <idOrSlug>',
+    "Create the widget under a merchant account you belong to. Pass 'personal' to skip the account picker and create a personal widget — 'personal' is reserved and always means your user, even if a merchant account's slug is literally 'personal'"
+  )
   .option('--api-host <url>', 'Override the nexus-api base URL')
   .action(
     (

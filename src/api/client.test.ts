@@ -18,4 +18,21 @@ describe('matchAccount', () => {
   it('returns undefined when nothing matches', () => {
     expect(matchAccount(accounts, 'nope')).toBeUndefined()
   })
+
+  it('prefers an exact id match when another account has that slug', () => {
+    const colliding: EekoAccount[] = [
+      { id: 'acct-1', slug: 'acct-2', name: 'Slug Collides' },
+      { id: 'acct-2', slug: 'other', name: 'Id Owner' },
+    ]
+    expect(matchAccount(colliding, 'acct-2')?.name).toBe('Id Owner')
+  })
+
+  it('matches slugs case-insensitively', () => {
+    expect(matchAccount(accounts, 'My-Shop')?.id).toBe('acct-1')
+    expect(matchAccount(accounts, 'OTHER-STORE')?.id).toBe('acct-2')
+  })
+
+  it('requires an exact (case-sensitive) id match', () => {
+    expect(matchAccount(accounts, 'ACCT-1')).toBeUndefined()
+  })
 })
