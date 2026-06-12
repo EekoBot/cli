@@ -25,6 +25,7 @@ import {
 } from '../api/client.js'
 import { AUTH_CONFIG } from '../auth/config.js'
 import { writeEekoConfig } from '../utils/config.js'
+import { writeAgentFiles } from '../utils/agent-files.js'
 import { cloneRepo, checkout } from '../utils/git.js'
 
 type AccountWidgetProject = AccountProject & { widget: NonNullable<AccountProject['widget']> }
@@ -211,6 +212,13 @@ export const cloneCommand = new Command('clone')
         apiHost: opts.apiHost,
         accountId,
       })
+
+      // Agent-facing files: skip whatever the repo already carries (an older
+      // AGENTS.md stays untouched — surface the refresh path instead).
+      const agentFiles = await writeAgentFiles(path.resolve(targetDir))
+      if (agentFiles.skipped.includes('AGENTS.md')) {
+        console.log('  AGENTS.md already in the repo — run `eeko agents-md --force` to refresh it')
+      }
 
       console.log(`✓ Cloned into ${targetDir} (on ${info.refs.draft})`)
       console.log(`    cd ${targetDir}`)

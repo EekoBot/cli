@@ -27,6 +27,7 @@ import {
 } from '../api/client.js'
 import { AUTH_CONFIG } from '../auth/config.js'
 import { writeEekoConfig } from '../utils/config.js'
+import { writeAgentFiles } from '../utils/agent-files.js'
 import { cloneRepo, checkout, stageAndCommit } from '../utils/git.js'
 import {
   TEMPLATES,
@@ -139,6 +140,7 @@ async function createAndScaffold(
   await scaffoldTemplate(opts.template, targetDir, safeName)
   writeEekoConfig(targetDir, { componentId, apiHost: opts.apiHost, accountId: opts.accountId })
   await writeFile(path.join(targetDir, 'package.json'), packageJson(safeName))
+  await writeAgentFiles(targetDir)
   await stageAndCommit(targetDir, `init: scaffold ${opts.template}`)
 
   setStatus('Done!')
