@@ -5,18 +5,23 @@
  */
 
 /**
- * Login page with email input
- * Styled to match merchant-react-app login page
+ * Login page with email input + Cloudflare Turnstile widget.
+ * Styled to match merchant-react-app login page.
+ *
+ * identity-service enforces Turnstile on /sign-in/magic-link, so the page
+ * renders the widget (public site key, same one the web apps and
+ * native-bridge ship) and only submits once a token is issued.
  */
-export function getLoginPageHtml(): string {
+export function getLoginPageHtml(turnstileSiteKey: string): string {
   return `<!DOCTYPE html>
 <html>
   <head>
     <title>Login - Eeko</title>
     <meta charset="UTF-8">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; connect-src 'self'; font-src https://fonts.gstatic.com;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline' https://challenges.cloudflare.com; style-src 'unsafe-inline' https://fonts.googleapis.com; connect-src 'self'; font-src https://fonts.gstatic.com; frame-src https://challenges.cloudflare.com;">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=onTurnstileLoad" async defer></script>
     <style>
       * {
         margin: 0;
@@ -128,7 +133,8 @@ export function getLoginPageHtml(): string {
       <div class="card-content">
         <form id="loginForm">
           <input type="email" id="email" placeholder="Enter your email" required autocomplete="email" autofocus>
-          <button type="submit" id="submitBtn">Send Magic Link</button>
+          <div id="turnstile-container" style="display:flex;justify-content:center;min-height:65px;"></div>
+          <button type="submit" id="submitBtn" disabled>Verifying…</button>
         </form>
         <p id="message" class="message hidden"></p>
       </div>
@@ -139,11 +145,48 @@ export function getLoginPageHtml(): string {
       const submitBtn = document.getElementById('submitBtn');
       const message = document.getElementById('message');
 
+      // Cloudflare Turnstile: identity-service requires a widget token on the
+      // magic-link send. Submit stays disabled until the challenge passes.
+      let captchaToken = null;
+      let widgetId = null;
+
+      function showError(text) {
+        message.textContent = text;
+        message.className = 'message error';
+      }
+
+      window.onTurnstileLoad = function () {
+        widgetId = window.turnstile.render('#turnstile-container', {
+          sitekey: ${JSON.stringify(turnstileSiteKey)},
+          theme: 'dark',
+          callback: function (token) {
+            captchaToken = token;
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Send Magic Link';
+          },
+          'expired-callback': function () {
+            captchaToken = null;
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Verifying…';
+            window.turnstile.reset(widgetId);
+          },
+          'error-callback': function (code) {
+            captchaToken = null;
+            submitBtn.disabled = true;
+            showError('Verification failed (' + code + '). If this persists, the Turnstile widget may not allow this hostname.');
+          }
+        });
+      };
+
       form.onsubmit = async (e) => {
         e.preventDefault();
         const email = emailInput.value.trim();
 
         if (!email) return;
+        if (!captchaToken) {
+          showError('Complete the verification challenge first.');
+          return;
+        }
 
         submitBtn.disabled = true;
         submitBtn.textContent = 'Sending...';
@@ -153,7 +196,7 @@ export function getLoginPageHtml(): string {
           const response = await fetch('/auth/send-link', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email })
+            body: JSON.stringify({ email, captchaToken })
           });
 
           const data = await response.json();
@@ -163,18 +206,25 @@ export function getLoginPageHtml(): string {
             message.className = 'message success';
             submitBtn.textContent = 'Link Sent!';
           } else {
-            message.textContent = data.error || 'Failed to send link. Please try again.';
-            message.className = 'message error';
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Send Magic Link';
+            showError(data.error || 'Failed to send link. Please try again.');
+            resetForRetry();
           }
         } catch (err) {
-          message.textContent = 'Connection error. Please try again.';
-          message.className = 'message error';
-          submitBtn.disabled = false;
-          submitBtn.textContent = 'Send Magic Link';
+          showError('Connection error. Please try again.');
+          resetForRetry();
         }
       };
+
+      // Turnstile tokens are single-use: after a failed send, re-run the
+      // challenge before allowing another attempt.
+      function resetForRetry() {
+        captchaToken = null;
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Verifying…';
+        if (window.turnstile && widgetId !== null) {
+          window.turnstile.reset(widgetId);
+        }
+      }
     </script>
   </body>
 </html>`

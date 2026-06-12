@@ -69,7 +69,7 @@ export async function startAuthServer(): Promise<AuthServerResult> {
     // GET / — login page
     if (req.method === 'GET' && url.pathname === '/') {
       res.writeHead(200, { 'Content-Type': 'text/html' })
-      res.end(getLoginPageHtml())
+      res.end(getLoginPageHtml(AUTH_CONFIG.auth.turnstileSiteKey))
       return
     }
 
@@ -81,10 +81,15 @@ export async function startAuthServer(): Promise<AuthServerResult> {
       })
       req.on('end', async () => {
         try {
-          const { email } = JSON.parse(body)
+          const { email, captchaToken } = JSON.parse(body)
           if (!email || typeof email !== 'string') {
             res.writeHead(400, { 'Content-Type': 'application/json' })
             res.end(JSON.stringify({ error: 'Email is required' }))
+            return
+          }
+          if (!captchaToken || typeof captchaToken !== 'string') {
+            res.writeHead(400, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ error: 'Verification token is required' }))
             return
           }
 
@@ -95,7 +100,7 @@ export async function startAuthServer(): Promise<AuthServerResult> {
           const callbackURL = `${AUTH_CONFIG.identity.baseUrl}/auth/bounce?to=${encodeURIComponent(
             redirectUrl
           )}`
-          const { error } = await requestMagicLink(email, callbackURL)
+          const { error } = await requestMagicLink(email, callbackURL, captchaToken)
 
           if (error) {
             res.writeHead(500, { 'Content-Type': 'application/json' })

@@ -12,6 +12,7 @@
 import { createServer } from 'vite'
 import path from 'path'
 import fs from 'fs'
+import type { AddressInfo } from 'net'
 import { TemplateEngine } from '@eeko/sdk/template/node'
 import { devHeadScripts, type InitState } from './widget-document.js'
 
@@ -83,6 +84,11 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
     root: cwd,
     server: {
       port,
+      // Bind IPv4 loopback explicitly: the default ('localhost') can fall
+      // back to an IPv6-only bind when another process holds the IPv4 port,
+      // which skips the port walk and leaves http://127.0.0.1:{port}
+      // pointing at the OTHER process.
+      host: '127.0.0.1',
       strictPort: false, // Allow Vite to find next available port
       open: false,
     },
@@ -116,7 +122,13 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
 
   await server.listen()
 
-  const actualPort = server.config.server.port || port
+  // The bound address is the truth — config.server.port is just the
+  // requested port and doesn't reflect a strictPort:false walk.
+  const address = server.httpServer?.address() as AddressInfo | null
+  if (!address || typeof address === 'string') {
+    throw new Error('[Dev] Vite did not report a bound address')
+  }
+  const actualPort = address.port
   console.log(`[Vite] Server listening on port ${actualPort}`)
 
   if (onReady) {

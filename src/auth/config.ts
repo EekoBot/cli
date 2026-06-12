@@ -19,6 +19,11 @@ export const AUTH_CONFIG = {
     // Loopback redirect port range (RFC 8252 §7.3 / §8.3 — localhost IP literal).
     redirectPortStart: 3000,
     redirectPortEnd: 3010,
+    // Cloudflare Turnstile SITE key — a public client key (like the Pusher
+    // key below), the same one the web apps and native-bridge ship.
+    // identity-service validates the widget's token on /sign-in/magic-link;
+    // without it the magic-link send is rejected when enforcement is on.
+    turnstileSiteKey: process.env.EEKO_TURNSTILE_SITE_KEY || '0x4AAAAAADUiNYSd61KjW701',
   },
   storage: {
     dir: '.eeko',
