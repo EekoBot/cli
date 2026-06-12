@@ -1,0 +1,43 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: transparent;
+  font-family: {fontFamily};
+}
+
+.goal {
+  width: 36%;
+  margin: 24px auto 0;
+  padding: 16px 20px;
+  border-radius: 14px;
+  background: {backgroundColor};
+  color: {textColor};
+}
+
+.goal__heading {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.goal__track {
+  width: 100%;
+  height: 18px;
+  border-radius: 9px;
+  background: {trackColor};
+  overflow: hidden;
+}
+
+.goal__fill {
+  width: 0%;
+  height: 100%;
+  background: {accentColor};
+  transition: width 0.4s ease;
+}
+
+.goal__label {
+  margin-top: 8px;
+  font-size: 14px;
+  text-align: right;
+  opacity: 0.9;
+}

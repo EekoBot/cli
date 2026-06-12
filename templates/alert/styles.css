@@ -1,47 +1,40 @@
-* {
-  margin: 0;
-  box-sizing: border-box;
-}
+* { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
-  font-family: system-ui, -apple-system, sans-serif;
   background: transparent;
+  font-family: {fontFamily};
 }
 
 .alert {
+  /* Starts hidden; the `show` op reveals it. */
+  visibility: hidden;
   display: flex;
-  align-items: stretch;
-  gap: 14px;
-  max-width: 420px;
+  align-items: center;
+  gap: 16px;
+  width: 32%;
+  margin: 24px auto 0;
   padding: 16px 20px;
+  border-radius: 14px;
   background: {backgroundColor};
-  color: #ffffff;
-  border-radius: 12px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
-  opacity: 0;
-  transform: translateY(12px);
-  transition: opacity 0.3s ease, transform 0.3s ease;
+  color: {textColor};
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
 }
 
-.alert.show {
-  opacity: 1;
-  transform: translateY(0);
+.alert__avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: 0 0 auto;
 }
 
-.alert-accent {
-  width: 4px;
-  border-radius: 4px;
-  background: {accentColor};
-}
-
-.alert-title {
+.alert__title {
   font-size: 20px;
   font-weight: 700;
   color: {accentColor};
-  margin-bottom: 2px;
 }
 
-.alert-message {
-  font-size: 15px;
+.alert__message {
+  font-size: 16px;
   opacity: 0.9;
 }

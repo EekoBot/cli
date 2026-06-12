@@ -1,0 +1,32 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: transparent;
+  font-family: {fontFamily};
+}
+
+.chat {
+  width: 28%;
+  padding: 12px;
+}
+
+.chat__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chat__row {
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: {rowBackground};
+  color: {textColor};
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.chat__user {
+  font-weight: 700;
+  color: {accentColor};
+  margin-right: 6px;
+}

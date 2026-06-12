@@ -1,0 +1,84 @@
+{
+  "name": "Countdown",
+  "componentType": "countdown",
+  "fields": [
+    {
+      "key": "label",
+      "label": "Label",
+      "type": "text",
+      "scope": "global",
+      "defaultValue": "Starting soon"
+    },
+    {
+      "key": "durationMs",
+      "label": "Duration (ms)",
+      "type": "number",
+      "scope": "global",
+      "defaultValue": 300000
+    },
+    {
+      "key": "fontFamily",
+      "label": "Font",
+      "type": "font",
+      "scope": "global",
+      "defaultValue": "system-ui, sans-serif"
+    },
+    {
+      "key": "backgroundColor",
+      "label": "Background",
+      "type": "color",
+      "scope": "global",
+      "defaultValue": "#1e1e2e"
+    },
+    {
+      "key": "textColor",
+      "label": "Text colour",
+      "type": "color",
+      "scope": "global",
+      "defaultValue": "#ffffff"
+    },
+    {
+      "key": "accentColor",
+      "label": "Time colour",
+      "type": "color",
+      "scope": "global",
+      "defaultValue": "#a78bfa"
+    }
+  ],
+  "interactions": {
+    "version": 1,
+    "on": {
+      "component_mount": [
+        {
+          "op": "start-timer",
+          "timerId": "cd",
+          "intervalMs": 1000,
+          "durationMs": 300000,
+          "mode": "countdown"
+        },
+        {
+          "op": "show",
+          "target": "el-countdown",
+          "animation": "fade"
+        }
+      ],
+      "timer_tick": [
+        {
+          "op": "set-text",
+          "target": "el-remaining",
+          "from": {
+            "from": "remaining"
+          }
+        }
+      ]
+    }
+  },
+  "globalConfig": {
+    "label": "Starting soon",
+    "durationMs": 300000,
+    "fontFamily": "system-ui, sans-serif",
+    "backgroundColor": "#1e1e2e",
+    "textColor": "#ffffff",
+    "accentColor": "#a78bfa"
+  }
+}

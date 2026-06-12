@@ -24,6 +24,13 @@ export interface InitState {
   userId: string
   globalConfig: Record<string, unknown>
   variantConfig: Record<string, unknown>
+  /** The manifest's declarative interactions — the SDK interaction runtime
+   * boots from `__EEKO_INIT__.interactions`; omitting it silently disables
+   * declarative widgets in dev. */
+  interactions?: unknown
+  /** Runtime behavior hints (displayDuration etc.) — read by the interaction
+   * runtime alongside `interactions`. */
+  behavior?: Record<string, unknown>
 }
 
 /**
@@ -67,7 +74,14 @@ export async function loadInitState(
     )
   }
   const { globalConfig, variantConfig } = resolveConfigs(manifest)
-  return { componentId: ids.componentId, userId: ids.userId, globalConfig, variantConfig }
+  return {
+    componentId: ids.componentId,
+    userId: ids.userId,
+    globalConfig,
+    variantConfig,
+    ...(manifest?.interactions ? { interactions: manifest.interactions } : {}),
+    ...(manifest?.behavior ? { behavior: manifest.behavior } : {}),
+  }
 }
 
 /** JSON for inline injection, `<` escaped so it can't break out of the script. */

@@ -10,7 +10,8 @@
 
 import { Command } from 'commander'
 import React from 'react'
-import { render, Box, Text, useInput } from 'ink'
+import { render, Box, Text } from 'ink'
+import { useInputWhenInteractive } from '../hooks/use-input-when-interactive.js'
 import SelectInput from 'ink-select-input'
 import path from 'path'
 import { existsSync } from 'fs'
@@ -39,7 +40,7 @@ function WidgetPicker({
   onSelect: (widgetId: string) => void
   onCancel: () => void
 }) {
-  useInput((_input, key) => {
+  useInputWhenInteractive((_input, key) => {
     if (key.escape) onCancel()
   })
 

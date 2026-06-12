@@ -3,51 +3,112 @@
   "componentType": "alert",
   "fields": [
     {
-      "key": "username",
-      "label": "Username",
+      "key": "titleFallback",
+      "label": "Title fallback",
       "type": "text",
-      "scope": "variant",
-      "defaultValue": "Someone"
-    },
-    {
-      "key": "message",
-      "label": "Message",
-      "type": "text",
-      "scope": "variant",
-      "defaultValue": "just triggered the alert!"
-    },
-    {
-      "key": "accentColor",
-      "label": "Accent colour",
-      "type": "color",
       "scope": "global",
-      "defaultValue": "#b6ff00"
+      "defaultValue": "New supporter"
+    },
+    {
+      "key": "fontFamily",
+      "label": "Font",
+      "type": "font",
+      "scope": "global",
+      "defaultValue": "system-ui, sans-serif"
     },
     {
       "key": "backgroundColor",
       "label": "Background",
       "type": "color",
       "scope": "global",
-      "defaultValue": "#040f0f"
+      "defaultValue": "#1e1e2e"
     },
     {
-      "key": "durationMs",
-      "label": "On-screen duration (ms)",
-      "type": "number",
+      "key": "textColor",
+      "label": "Text colour",
+      "type": "color",
       "scope": "global",
-      "defaultValue": 5000
+      "defaultValue": "#ffffff"
+    },
+    {
+      "key": "accentColor",
+      "label": "Accent colour",
+      "type": "color",
+      "scope": "global",
+      "defaultValue": "#a78bfa"
     }
   ],
-  "globalConfig": {
-    "accentColor": "#b6ff00",
-    "backgroundColor": "#040f0f",
-    "durationMs": 5000
-  },
-  "variantConfig": {
-    "username": "Someone",
-    "message": "just triggered the alert!"
-  },
   "behavior": {
-    "displayDuration": 5000
+    "displayDuration": 5000,
+    "queueBehavior": "queue"
+  },
+  "interactions": {
+    "version": 1,
+    "on": {
+      "component_trigger": [
+        {
+          "op": "set-attr",
+          "target": "el-avatar",
+          "attr": "src",
+          "from": {
+            "from": "profilePictureUrl"
+          },
+          "onlyIf": {
+            "from": "profilePictureUrl",
+            "op": "present"
+          }
+        },
+        {
+          "op": "set-text",
+          "target": "el-title",
+          "from": {
+            "from": "displayName"
+          }
+        },
+        {
+          "op": "set-text",
+          "target": "el-message",
+          "from": {
+            "from": "formattedAmount"
+          }
+        },
+        {
+          "op": "play-sound"
+        },
+        {
+          "op": "show",
+          "target": "el-alert",
+          "animation": "slide-up"
+        },
+        {
+          "op": "wait",
+          "ms": {
+            "fromBehavior": "displayDuration"
+          }
+        },
+        {
+          "op": "hide",
+          "target": "el-alert",
+          "animation": "fade"
+        }
+      ],
+      "component_dismiss": [
+        {
+          "op": "hide",
+          "target": "el-alert",
+          "animation": "fade"
+        }
+      ]
+    },
+    "queue": {
+      "component_trigger": "queue"
+    }
+  },
+  "globalConfig": {
+    "titleFallback": "New supporter",
+    "fontFamily": "system-ui, sans-serif",
+    "backgroundColor": "#1e1e2e",
+    "textColor": "#ffffff",
+    "accentColor": "#a78bfa"
   }
 }

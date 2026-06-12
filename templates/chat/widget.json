@@ -1,0 +1,72 @@
+{
+  "name": "Chat",
+  "componentType": "chat",
+  "fields": [
+    {
+      "key": "fontFamily",
+      "label": "Font",
+      "type": "font",
+      "scope": "global",
+      "defaultValue": "system-ui, sans-serif"
+    },
+    {
+      "key": "rowBackground",
+      "label": "Row background",
+      "type": "color",
+      "scope": "global",
+      "defaultValue": "rgba(30,30,46,0.85)"
+    },
+    {
+      "key": "textColor",
+      "label": "Text colour",
+      "type": "color",
+      "scope": "global",
+      "defaultValue": "#ffffff"
+    },
+    {
+      "key": "accentColor",
+      "label": "Name colour",
+      "type": "color",
+      "scope": "global",
+      "defaultValue": "#a78bfa"
+    }
+  ],
+  "interactions": {
+    "version": 1,
+    "on": {
+      "chat_message": [
+        {
+          "op": "clone-template",
+          "templateRef": "el-row",
+          "into": "el-list",
+          "bindings": {
+            "el-row-user": {
+              "set": "text",
+              "value": {
+                "from": "user.displayName"
+              }
+            },
+            "el-row-text": {
+              "set": "text",
+              "value": {
+                "from": "message.text"
+              }
+            }
+          }
+        },
+        {
+          "op": "trim-children",
+          "target": "el-list",
+          "max": 30,
+          "from": "oldest"
+        }
+      ]
+    }
+  },
+  "globalConfig": {
+    "fontFamily": "system-ui, sans-serif",
+    "rowBackground": "rgba(30,30,46,0.85)",
+    "textColor": "#ffffff",
+    "accentColor": "#a78bfa"
+  }
+}
