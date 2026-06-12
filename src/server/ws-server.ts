@@ -10,11 +10,13 @@ import type { EventType } from '@eeko/sdk'
 import { toEnvelope, type InitState } from './widget-document.js'
 
 export interface DevEventMessage {
-  type: 'event' | 'state' | 'command'
+  type: 'event' | 'state' | 'command' | 'ack'
   event?: EventType
   payload?: unknown
   state?: Record<string, unknown>
   command?: 'init' | 'reset' | 'disconnect'
+  /** On 'ack': how many widget clients (excluding the sender) received the event. */
+  delivered?: number
   metadata?: {
     timestamp: string
     source: 'cli' | 'ui'
@@ -117,7 +119,7 @@ export class DevWebSocketServer extends EventEmitter {
     })
   }
 
-  private handleMessage(message: DevEventMessage, _ws: WebSocket) {
+  private handleMessage(message: DevEventMessage, ws: WebSocket) {
     // Re-broadcast client-sent events (e.g. `eeko test` from another terminal)
     // to the widget(s), normalising to the wire envelope like emitEvent does so
     // handlers receive the same shape as production.
@@ -126,7 +128,17 @@ export class DevWebSocketServer extends EventEmitter {
         message.event !== undefined
           ? { ...message, payload: toEnvelope(message.event, message.payload) }
           : message
-      this.broadcast(normalised)
+      let delivered = 0
+      const data = JSON.stringify(normalised)
+      this.clients.forEach((client) => {
+        if (client !== ws && client.readyState === WebSocket.OPEN) {
+          client.send(data)
+          delivered++
+        }
+      })
+      // Honest ack to the sender: "✓ Sent" with zero connected widgets is a
+      // event into the void, and the sender should be able to say so.
+      this.sendToClient(ws, { type: 'ack', event: message.event, delivered })
       this.emit('event', { type: message.event, payload: message.payload })
     }
   }

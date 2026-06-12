@@ -68,7 +68,7 @@ Stop after \`eeko publish\` and report what you built.
 
 ## MCP
 
-\`.mcp.json\` connects you to Eeko's platform MCP server (${MCP_PLATFORM_URL}). Use \`describe_trigger\` for the exact data points a platform trigger carries — never guess payload field names. Discovery tools (\`list_trigger_types\`, \`list_action_types\`, \`list_user_assets\`) cover what exists on the account.
+\`.mcp.json\` connects you to Eeko's platform MCP server (${MCP_PLATFORM_URL}). Use \`describe_trigger\` for the exact data points a platform trigger carries before binding payload fields the guide doesn't list. Discovery tools (\`list_trigger_types\`, \`list_action_types\`, \`list_user_assets\`) cover what exists on the account. If the MCP server is unreachable, the guide's documented common dataPoints are a safe baseline — prefer them over invented field names. (The scaffolded \`script.js\` comment mentions \`list_trigger_types\`; via MCP that is the same-named tool.)
 
 ---
 

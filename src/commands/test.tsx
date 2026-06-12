@@ -70,6 +70,18 @@ function TestUI({ eventType, payload, wsPort }: TestUIProps) {
 
   useEffect(() => {
     const ws = new WebSocket(`ws://localhost:${wsPort}`)
+    let finished = false
+
+    const finish = (text: string, warned: boolean) => {
+      if (finished) return
+      finished = true
+      setStatus(warned ? 'error' : 'success')
+      setMessage(text)
+      setTimeout(() => {
+        ws.close()
+        process.exit(0)
+      }, 100)
+    }
 
     ws.on('open', () => {
       setStatus('sending')
@@ -85,13 +97,26 @@ function TestUI({ eventType, payload, wsPort }: TestUIProps) {
       }
 
       ws.send(JSON.stringify(eventMessage))
-      setStatus('success')
-      setMessage(`Sent ${eventType} event`)
+      // Wait briefly for the server's delivery ack so "sent" is honest.
+      setTimeout(() => finish(`Sent ${eventType} event`, false), 500)
+    })
 
-      setTimeout(() => {
-        ws.close()
-        process.exit(0)
-      }, 100)
+    ws.on('message', (data) => {
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; delivered?: number }
+        if (msg.type === 'ack') {
+          if (msg.delivered === 0) {
+            finish(
+              `Sent ${eventType}, but no widget is connected — open the dev server URL in a browser first`,
+              true
+            )
+          } else {
+            finish(`Sent ${eventType} event (delivered to ${msg.delivered} widget${msg.delivered === 1 ? '' : 's'})`, false)
+          }
+        }
+      } catch {
+        /* ignore non-JSON */
+      }
     })
 
     ws.on('error', (err) => {
@@ -136,6 +161,18 @@ function MultiEventUI({ events, wsPort }: MultiEventUIProps) {
 
   useEffect(() => {
     const ws = new WebSocket(`ws://localhost:${wsPort}`)
+    let lastDelivered: number | null = null
+
+    ws.on('message', (data) => {
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; delivered?: number }
+        if (msg.type === 'ack' && typeof msg.delivered === 'number') {
+          lastDelivered = msg.delivered
+        }
+      } catch {
+        /* ignore non-JSON */
+      }
+    })
 
     ws.on('open', async () => {
       setStatus('sending')
@@ -161,8 +198,17 @@ function MultiEventUI({ events, wsPort }: MultiEventUIProps) {
         }
       }
 
-      setStatus('success')
-      setMessage(`Sent ${events.length} events`)
+      // Give the final ack a moment to arrive before reporting.
+      await new Promise((resolve) => setTimeout(resolve, 300))
+      if (lastDelivered === 0) {
+        setStatus('error')
+        setMessage(
+          `Sent ${events.length} events, but no widget is connected — open the dev server URL in a browser first`
+        )
+      } else {
+        setStatus('success')
+        setMessage(`Sent ${events.length} events`)
+      }
 
       setTimeout(() => {
         ws.close()
