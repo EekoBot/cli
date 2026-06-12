@@ -325,6 +325,8 @@ export function createBitsPayload(amount: number = 100) {
     monetary: {
       amount,
       currency: 'USD',
+      // Required by MonetaryInfoSchema — bits are Twitch's platform currency.
+      currencyType: 'platform_currency',
       formattedAmount: `${amount} bits`,
       message: 'Great stream! Keep it up!',
     },

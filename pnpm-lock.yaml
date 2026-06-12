@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@eeko/sdk':
-        specifier: file:../sdk
-        version: file:../sdk
+        specifier: ^0.10.0
+        version: 0.10.0
       chalk:
         specifier: ^5.3.0
         version: 5.6.2
@@ -82,8 +82,8 @@ packages:
     resolution: {integrity: sha512-3yWxPTq3UQ/FY9p1ErPxIyfT64elWaMvM9lIHnaqpyft63tkxodF5aUElYHrdisWve5cETkh1+KBw1yJuW0aRw==}
     engines: {node: '>=14.13.1'}
 
-  '@eeko/sdk@file:../sdk':
-    resolution: {directory: ../sdk, type: directory}
+  '@eeko/sdk@0.10.0':
+    resolution: {integrity: sha512-QL47SJj3UvqDoW7wc7o8gWE9Bbx3NLlZqGGKXWeGqguIv+Djyu+NOD2UKDqLGXsWiqVOgqoXx3XlnxOmEgX1rw==}
     engines: {node: '>=18.0.0'}
 
   '@esbuild/aix-ppc64@0.25.12':
@@ -1235,7 +1235,7 @@ snapshots:
       ansi-styles: 6.2.3
       is-fullwidth-code-point: 4.0.0
 
-  '@eeko/sdk@file:../sdk': {}
+  '@eeko/sdk@0.10.0': {}
 
   '@esbuild/aix-ppc64@0.25.12':
     optional: true
