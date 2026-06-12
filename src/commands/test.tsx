@@ -33,24 +33,55 @@ import {
   createUnmountPayload,
   getAllTestChatPayloads,
 } from '../test-events/index.js'
+import { readDevDescriptor, DEV_DESCRIPTOR_FILENAME } from '../utils/dev-descriptor.js'
 
-const WS_PORT = 9876
+/**
+ * Find the running dev server's WebSocket port via the .eeko-dev.json
+ * descriptor `eeko dev` writes. The default port (9876) can't be assumed —
+ * the dev server walks to a free port when it's taken.
+ */
+function resolveWsPort(): number {
+  const result = readDevDescriptor()
+  if (result.ok) return result.descriptor.wsPort
+
+  const hints: Record<typeof result.reason, string> = {
+    missing: `No ${DEV_DESCRIPTOR_FILENAME} in this directory. Run \`eeko dev\` first (in this widget's directory).`,
+    stale: `Found ${DEV_DESCRIPTOR_FILENAME} but its dev server is no longer running. Run \`eeko dev\` first.`,
+    invalid: `${DEV_DESCRIPTOR_FILENAME} is unreadable. Restart \`eeko dev\` to regenerate it.`,
+  }
+  console.error(`✖ ${hints[result.reason]}`)
+  process.exit(1)
+}
 
 interface TestUIProps {
   eventType: EventType
   payload: unknown
+  wsPort: number
 }
 
 interface MultiEventUIProps {
   events: Array<{ eventType: EventType; payload: unknown; delay?: number }>
+  wsPort: number
 }
 
-function TestUI({ eventType, payload }: TestUIProps) {
+function TestUI({ eventType, payload, wsPort }: TestUIProps) {
   const [status, setStatus] = useState<'connecting' | 'sending' | 'success' | 'error'>('connecting')
   const [message, setMessage] = useState('')
 
   useEffect(() => {
-    const ws = new WebSocket(`ws://localhost:${WS_PORT}`)
+    const ws = new WebSocket(`ws://localhost:${wsPort}`)
+    let finished = false
+
+    const finish = (text: string, warned: boolean) => {
+      if (finished) return
+      finished = true
+      setStatus(warned ? 'error' : 'success')
+      setMessage(text)
+      setTimeout(() => {
+        ws.close()
+        process.exit(0)
+      }, 100)
+    }
 
     ws.on('open', () => {
       setStatus('sending')
@@ -66,13 +97,26 @@ function TestUI({ eventType, payload }: TestUIProps) {
       }
 
       ws.send(JSON.stringify(eventMessage))
-      setStatus('success')
-      setMessage(`Sent ${eventType} event`)
+      // Wait briefly for the server's delivery ack so "sent" is honest.
+      setTimeout(() => finish(`Sent ${eventType} event`, false), 500)
+    })
 
-      setTimeout(() => {
-        ws.close()
-        process.exit(0)
-      }, 100)
+    ws.on('message', (data) => {
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; delivered?: number }
+        if (msg.type === 'ack') {
+          if (msg.delivered === 0) {
+            finish(
+              `Sent ${eventType}, but no widget is connected — open the dev server URL in a browser first`,
+              true
+            )
+          } else {
+            finish(`Sent ${eventType} event (delivered to ${msg.delivered} widget${msg.delivered === 1 ? '' : 's'})`, false)
+          }
+        }
+      } catch {
+        /* ignore non-JSON */
+      }
     })
 
     ws.on('error', (err) => {
@@ -84,7 +128,7 @@ function TestUI({ eventType, payload }: TestUIProps) {
     return () => {
       ws.close()
     }
-  }, [eventType, payload])
+  }, [eventType, payload, wsPort])
 
   return (
     <Box padding={1}>
@@ -110,13 +154,25 @@ function TestUI({ eventType, payload }: TestUIProps) {
   )
 }
 
-function MultiEventUI({ events }: MultiEventUIProps) {
+function MultiEventUI({ events, wsPort }: MultiEventUIProps) {
   const [status, setStatus] = useState<'connecting' | 'sending' | 'success' | 'error'>('connecting')
   const [message, setMessage] = useState('')
   const [sent, setSent] = useState(0)
 
   useEffect(() => {
-    const ws = new WebSocket(`ws://localhost:${WS_PORT}`)
+    const ws = new WebSocket(`ws://localhost:${wsPort}`)
+    let lastDelivered: number | null = null
+
+    ws.on('message', (data) => {
+      try {
+        const msg = JSON.parse(data.toString()) as { type?: string; delivered?: number }
+        if (msg.type === 'ack' && typeof msg.delivered === 'number') {
+          lastDelivered = msg.delivered
+        }
+      } catch {
+        /* ignore non-JSON */
+      }
+    })
 
     ws.on('open', async () => {
       setStatus('sending')
@@ -142,8 +198,17 @@ function MultiEventUI({ events }: MultiEventUIProps) {
         }
       }
 
-      setStatus('success')
-      setMessage(`Sent ${events.length} events`)
+      // Give the final ack a moment to arrive before reporting.
+      await new Promise((resolve) => setTimeout(resolve, 300))
+      if (lastDelivered === 0) {
+        setStatus('error')
+        setMessage(
+          `Sent ${events.length} events, but no widget is connected — open the dev server URL in a browser first`
+        )
+      } else {
+        setStatus('success')
+        setMessage(`Sent ${events.length} events`)
+      }
 
       setTimeout(() => {
         ws.close()
@@ -160,7 +225,7 @@ function MultiEventUI({ events }: MultiEventUIProps) {
     return () => {
       ws.close()
     }
-  }, [events])
+  }, [events, wsPort])
 
   return (
     <Box padding={1}>
@@ -206,7 +271,7 @@ testCommand
       process.exit(1)
     }
     const payload = createTriggerPayload(customData)
-    render(<TestUI eventType="component_trigger" payload={payload} />)
+    render(<TestUI eventType="component_trigger" payload={payload} wsPort={resolveWsPort()} />)
   })
 
 // test chat
@@ -226,7 +291,7 @@ testCommand
       default:
         payload = createTwitchChatPayload()
     }
-    render(<TestUI eventType="chat_message" payload={payload} />)
+    render(<TestUI eventType="chat_message" payload={payload} wsPort={resolveWsPort()} />)
   })
 
 // test sub - subscription events
@@ -263,7 +328,7 @@ testCommand
       payload = createTwitchSubPayload(1)
     }
 
-    render(<TestUI eventType="chat_message" payload={payload} />)
+    render(<TestUI eventType="chat_message" payload={payload} wsPort={resolveWsPort()} />)
   })
 
 // test bits
@@ -274,7 +339,7 @@ testCommand
   .action((options) => {
     const amount = parseInt(options.amount, 10) || 100
     const payload = createBitsPayload(amount)
-    render(<TestUI eventType="chat_message" payload={payload} />)
+    render(<TestUI eventType="chat_message" payload={payload} wsPort={resolveWsPort()} />)
   })
 
 // test follow
@@ -283,7 +348,7 @@ testCommand
   .description('Send a Twitch follow event')
   .action(() => {
     const payload = createFollowPayload()
-    render(<TestUI eventType="chat_message" payload={payload} />)
+    render(<TestUI eventType="chat_message" payload={payload} wsPort={resolveWsPort()} />)
   })
 
 // test all-chat - sends all test events like merchant "Test Chat" button
@@ -301,7 +366,7 @@ testCommand
       delay,
     }))
 
-    render(<MultiEventUI events={events} />)
+    render(<MultiEventUI events={events} wsPort={resolveWsPort()} />)
   })
 
 // test mount
@@ -310,7 +375,7 @@ testCommand
   .description('Send a component mount event')
   .action(() => {
     const payload = createMountPayload()
-    render(<TestUI eventType="component_mount" payload={payload} />)
+    render(<TestUI eventType="component_mount" payload={payload} wsPort={resolveWsPort()} />)
   })
 
 // test unmount
@@ -319,7 +384,7 @@ testCommand
   .description('Send a component unmount event')
   .action(() => {
     const payload = createUnmountPayload()
-    render(<TestUI eventType="component_unmount" payload={payload} />)
+    render(<TestUI eventType="component_unmount" payload={payload} wsPort={resolveWsPort()} />)
   })
 
 // test update
@@ -344,6 +409,7 @@ testCommand
           data,
           timestamp: Date.now(),
         }}
+        wsPort={resolveWsPort()}
       />
     )
   })

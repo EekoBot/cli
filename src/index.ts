@@ -29,6 +29,7 @@ import { whoamiCommand } from './commands/whoami.js'
 import { publishCommand } from './commands/publish.js'
 import { promoteCommand } from './commands/promote.js'
 import { credentialHelperCommand } from './commands/credential-helper.js'
+import { agentsMdCommand } from './commands/agents-md.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const pkg = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf-8'))
@@ -47,6 +48,7 @@ program.addCommand(logoutCommand)
 program.addCommand(whoamiCommand)
 program.addCommand(publishCommand)
 program.addCommand(promoteCommand)
+program.addCommand(agentsMdCommand)
 // Hidden — invoked by git, not humans.
 program.addCommand(credentialHelperCommand, { hidden: true })
 

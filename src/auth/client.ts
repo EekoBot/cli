@@ -98,12 +98,19 @@ export async function verifyToken(token: string): Promise<JWTPayload | null> {
  */
 export async function requestMagicLink(
   email: string,
-  callbackURL: string
+  callbackURL: string,
+  captchaToken?: string
 ): Promise<{ error: Error | null }> {
   try {
     const res = await fetch(`${identityBaseUrl}/api/auth/sign-in/magic-link`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        // Cloudflare Turnstile token — identity-service's captcha plugin
+        // validates this on /sign-in/magic-link when enforcement is enabled.
+        ...(captchaToken ? { 'x-captcha-response': captchaToken } : {}),
+      },
       body: JSON.stringify({ email, callbackURL }),
     })
     if (res.ok) return { error: null }

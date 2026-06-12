@@ -9,7 +9,8 @@
 
 import { Command } from 'commander'
 import React, { useEffect, useState } from 'react'
-import { render, Box, Text, useApp, useInput } from 'ink'
+import { render, Box, Text, useApp } from 'ink'
+import { useInputWhenInteractive } from '../hooks/use-input-when-interactive.js'
 import SelectInput from 'ink-select-input'
 import TextInput from 'ink-text-input'
 import Spinner from 'ink-spinner'
@@ -26,10 +27,12 @@ import {
 } from '../api/client.js'
 import { AUTH_CONFIG } from '../auth/config.js'
 import { writeEekoConfig } from '../utils/config.js'
+import { writeAgentFiles } from '../utils/agent-files.js'
 import { cloneRepo, checkout, stageAndCommit } from '../utils/git.js'
 import {
   TEMPLATES,
   TEMPLATE_COMPONENT_TYPE,
+  LEGACY_TEMPLATE_ALIASES,
   scaffoldTemplate,
   isTemplateName,
   type TemplateName,
@@ -137,6 +140,7 @@ async function createAndScaffold(
   await scaffoldTemplate(opts.template, targetDir, safeName)
   writeEekoConfig(targetDir, { componentId, apiHost: opts.apiHost, accountId: opts.accountId })
   await writeFile(path.join(targetDir, 'package.json'), packageJson(safeName))
+  await writeAgentFiles(targetDir)
   await stageAndCommit(targetDir, `init: scaffold ${opts.template}`)
 
   setStatus('Done!')
@@ -166,7 +170,7 @@ function InitUI({ initial }: { initial: InitOptions }) {
   const [accountId, setAccountId] = useState<string | undefined>(undefined)
   const [accountsWarning, setAccountsWarning] = useState<string | null>(null)
 
-  useInput((_input, key) => {
+  useInputWhenInteractive((_input, key) => {
     if (key.escape) exit()
   })
 
@@ -402,7 +406,7 @@ function InitUI({ initial }: { initial: InitOptions }) {
 export const initCommand = new Command('init')
   .description('Create a new widget and scaffold it locally')
   .argument('[name]', 'Project / directory name')
-  .option('-t, --template <name>', 'Starter template: alert | chat-overlay | goal-bar')
+  .option('-t, --template <name>', `Starter template: ${TEMPLATES.join(' | ')}`)
   .option('--type <componentType>', 'Component type for the new widget')
   .option(
     '--account <idOrSlug>',
@@ -414,8 +418,11 @@ export const initCommand = new Command('init')
       name: string | undefined,
       opts: { template?: string; type?: string; account?: string; apiHost?: string }
     ) => {
-      const template =
-        opts.template && isTemplateName(opts.template) ? opts.template : undefined
+      const requested =
+        opts.template && opts.template in LEGACY_TEMPLATE_ALIASES
+          ? LEGACY_TEMPLATE_ALIASES[opts.template]
+          : opts.template
+      const template = requested && isTemplateName(requested) ? requested : undefined
       if (opts.template && !template) {
         console.error(`Unknown template "${opts.template}". Options: ${TEMPLATES.join(', ')}`)
         process.exit(1)

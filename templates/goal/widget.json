@@ -1,0 +1,91 @@
+{
+  "name": "Goal",
+  "componentType": "overlay",
+  "fields": [
+    {
+      "key": "title",
+      "label": "Title",
+      "type": "text",
+      "scope": "global",
+      "defaultValue": "Sub goal"
+    },
+    {
+      "key": "goal",
+      "label": "Goal target",
+      "type": "number",
+      "scope": "global",
+      "defaultValue": 100
+    },
+    {
+      "key": "fontFamily",
+      "label": "Font",
+      "type": "font",
+      "scope": "global",
+      "defaultValue": "system-ui, sans-serif"
+    },
+    {
+      "key": "backgroundColor",
+      "label": "Background",
+      "type": "color",
+      "scope": "global",
+      "defaultValue": "#1e1e2e"
+    },
+    {
+      "key": "trackColor",
+      "label": "Track colour",
+      "type": "color",
+      "scope": "global",
+      "defaultValue": "rgba(255,255,255,0.15)"
+    },
+    {
+      "key": "textColor",
+      "label": "Text colour",
+      "type": "color",
+      "scope": "global",
+      "defaultValue": "#ffffff"
+    },
+    {
+      "key": "accentColor",
+      "label": "Fill colour",
+      "type": "color",
+      "scope": "global",
+      "defaultValue": "#34d399"
+    }
+  ],
+  "interactions": {
+    "version": 1,
+    "on": {
+      "variable_updated": [
+        {
+          "op": "set-style-ratio",
+          "target": "el-fill",
+          "prop": "width",
+          "numerator": {
+            "from": "variable.value"
+          },
+          "denominator": {
+            "from": "goal"
+          },
+          "unit": "%",
+          "clamp": true
+        },
+        {
+          "op": "set-text",
+          "target": "el-label",
+          "from": {
+            "from": "variable.value"
+          }
+        }
+      ]
+    }
+  },
+  "globalConfig": {
+    "title": "Sub goal",
+    "goal": 100,
+    "fontFamily": "system-ui, sans-serif",
+    "backgroundColor": "#1e1e2e",
+    "trackColor": "rgba(255,255,255,0.15)",
+    "textColor": "#ffffff",
+    "accentColor": "#34d399"
+  }
+}

@@ -1,87 +1,44 @@
 /**
- * eeko build - Validate widget structure
+ * eeko build — validate the widget project locally.
  *
- * Checks for required files and validates field.json schema
+ * File presence + manifest schema + interactions structure + contract lint,
+ * via the shared core in utils/validate-project (same @eeko/sdk primitives
+ * the platform uses; nexus-api stays authoritative on commit).
+ *
+ * `--json` emits the structured report on stdout (no UI) — the surface agents
+ * iterate against.
  */
 
 import { Command } from 'commander'
 import React, { useState, useEffect } from 'react'
 import { render, Box, Text } from 'ink'
 import Spinner from 'ink-spinner'
-import fs from 'fs/promises'
-import path from 'path'
-import { validateManifest } from '@eeko/sdk/template'
-
-interface ValidationResult {
-  file: string
-  status: 'checking' | 'ok' | 'missing' | 'error'
-  message?: string
-}
-
-const REQUIRED_FILES = ['index.html', 'styles.css', 'script.js', 'widget.json']
+import {
+  validateProject,
+  CANONICAL_FILES,
+  type ProjectValidation,
+} from '../utils/validate-project.js'
 
 function BuildUI() {
-  const [results, setResults] = useState<ValidationResult[]>(
-    REQUIRED_FILES.map((file) => ({ file, status: 'checking' }))
-  )
-  const [done, setDone] = useState(false)
-  const [hasErrors, setHasErrors] = useState(false)
+  const [report, setReport] = useState<ProjectValidation | null>(null)
 
   useEffect(() => {
-    async function validate() {
-      const newResults: ValidationResult[] = []
-      let errors = false
-
-      for (const file of REQUIRED_FILES) {
-        try {
-          const filePath = path.join(process.cwd(), file)
-          await fs.access(filePath)
-
-          // Validate widget.json against the shared manifest schema, so a
-          // widget that validates locally validates on commit.
-          if (file === 'widget.json') {
-            try {
-              const content = await fs.readFile(filePath, 'utf-8')
-              const parsed = JSON.parse(content)
-              const result = validateManifest(parsed)
-              if (!result.ok) {
-                newResults.push({
-                  file,
-                  status: 'error',
-                  message: result.errors.join('; '),
-                })
-                errors = true
-                continue
-              }
-              newResults.push({ file, status: 'ok' })
-            } catch {
-              newResults.push({
-                file,
-                status: 'error',
-                message: 'Invalid JSON',
-              })
-              errors = true
-            }
-          } else {
-            newResults.push({ file, status: 'ok' })
-          }
-        } catch {
-          newResults.push({ file, status: 'missing' })
-          errors = true
-        }
-      }
-
-      setResults(newResults)
-      setHasErrors(errors)
-      setDone(true)
-
-      setTimeout(() => {
-        process.exit(errors ? 1 : 0)
-      }, 500)
-    }
-
-    validate()
+    validateProject().then((result) => {
+      setReport(result)
+      setTimeout(() => process.exit(result.ok ? 0 : 1), 500)
+    })
   }, [])
+
+  if (!report) {
+    return (
+      <Box padding={1}>
+        <Text color="yellow">
+          <Spinner type="dots" />
+        </Text>
+        <Text> Validating…</Text>
+      </Box>
+    )
+  }
 
   return (
     <Box flexDirection="column" padding={1}>
@@ -91,51 +48,65 @@ function BuildUI() {
         </Text>
       </Box>
 
-      {results.map((result) => (
-        <Box key={result.file}>
-          {result.status === 'checking' && (
-            <>
-              <Text color="yellow">
-                <Spinner type="dots" />
-              </Text>
-              <Text> {result.file}</Text>
-            </>
-          )}
-          {result.status === 'ok' && (
+      {CANONICAL_FILES.map((file) => (
+        <Box key={file}>
+          {report.files.missing.includes(file) ? (
             <Text>
-              <Text color="green">✓</Text> {result.file}
+              <Text color="red">✖</Text> {file} <Text dimColor>(missing)</Text>
             </Text>
-          )}
-          {result.status === 'missing' && (
+          ) : (
             <Text>
-              <Text color="red">✖</Text> {result.file}{' '}
-              <Text dimColor>(missing)</Text>
-            </Text>
-          )}
-          {result.status === 'error' && (
-            <Text>
-              <Text color="red">✖</Text> {result.file}{' '}
-              <Text color="red">({result.message})</Text>
+              <Text color="green">✓</Text> {file}
             </Text>
           )}
         </Box>
       ))}
 
-      {done && (
-        <Box marginTop={1}>
-          {hasErrors ? (
-            <Text color="red">Build validation failed</Text>
-          ) : (
-            <Text color="green">✓ Widget structure is valid</Text>
-          )}
-        </Box>
-      )}
+      {!report.manifest.ok &&
+        report.manifest.errors.map((err, i) => (
+          <Text key={`m${i}`} color="red">
+            ✖ manifest: {err}
+          </Text>
+        ))}
+
+      {report.interactions && !report.interactions.ok &&
+        report.interactions.errors.map((err, i) => (
+          <Text key={`i${i}`} color="red">
+            ✖ interactions: {err}
+          </Text>
+        ))}
+
+      {report.lint.errors.map((issue, i) => (
+        <Text key={`le${i}`} color="red">
+          ✖ {issue.file}: {issue.message} <Text dimColor>[{issue.rule}]</Text>
+        </Text>
+      ))}
+
+      {report.lint.warnings.map((issue, i) => (
+        <Text key={`lw${i}`} color="yellow">
+          ⚠ {issue.file}: {issue.message} <Text dimColor>[{issue.rule}]</Text>
+        </Text>
+      ))}
+
+      <Box marginTop={1}>
+        {report.ok ? (
+          <Text color="green">✓ Widget is valid</Text>
+        ) : (
+          <Text color="red">Build validation failed</Text>
+        )}
+      </Box>
     </Box>
   )
 }
 
 export const buildCommand = new Command('build')
-  .description('Validate widget structure')
-  .action(() => {
+  .description('Validate the widget: files, manifest schema, interactions, contract lint')
+  .option('--json', 'Emit the structured validation report on stdout')
+  .action(async (opts: { json?: boolean }) => {
+    if (opts.json) {
+      const report = await validateProject()
+      process.stdout.write(JSON.stringify(report, null, 2) + '\n')
+      process.exit(report.ok ? 0 : 1)
+    }
     render(<BuildUI />)
   })

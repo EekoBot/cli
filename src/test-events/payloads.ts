@@ -325,6 +325,8 @@ export function createBitsPayload(amount: number = 100) {
     monetary: {
       amount,
       currency: 'USD',
+      // Required by MonetaryInfoSchema — bits are Twitch's platform currency.
+      currencyType: 'platform_currency',
       formattedAmount: `${amount} bits`,
       message: 'Great stream! Keep it up!',
     },
@@ -358,10 +360,23 @@ export function createFollowPayload() {
 // Component Events
 // ============================================================================
 
+/**
+ * Production `component_trigger` payloads are a FLAT record of the trigger's
+ * resolved dataPoints (component-dispatcher spreads `{...dataPoints,
+ * ...fieldData}` into the wire envelope's payload — componentId/timestamp live
+ * in the envelope context, not here). Default to the common alert dataPoints
+ * so declarative starters' bindings (displayName, formattedAmount, …) resolve
+ * out of the box; `--data` overrides or extends.
+ */
 export function createTriggerPayload(variantFields?: Record<string, unknown>) {
   return {
-    componentId: 'dev-component',
-    timestamp: Date.now(),
+    username: 'testuser',
+    displayName: 'TestUser',
+    userId: '12345',
+    channelName: 'TestChannel',
+    amount: 5,
+    formattedAmount: '$5.00',
+    message: 'This is a test trigger',
     ...variantFields,
   }
 }

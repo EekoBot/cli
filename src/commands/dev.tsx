@@ -10,7 +10,7 @@
 
 import { Command } from 'commander'
 import React, { useState, useEffect } from 'react'
-import { render, Box, Text, useApp, useInput } from 'ink'
+import { render, Box, Text, useApp, useInput, useStdin } from 'ink'
 import Spinner from 'ink-spinner'
 import { startDevServer, type DevServer } from '../server/vite-plugin.js'
 import { createDevWebSocketServer, type DevWebSocketServer } from '../server/ws-server.js'
@@ -22,6 +22,7 @@ import { findEventByShortcut, type TestEventDefinition } from '../test-events/in
 import { loadEekoConfig } from '../utils/config.js'
 import { loadSessionSync } from '../auth/store.js'
 import { AUTH_CONFIG } from '../auth/config.js'
+import { writeDevDescriptor, removeDevDescriptor } from '../utils/dev-descriptor.js'
 
 interface DevUIProps {
   port: number
@@ -38,6 +39,10 @@ interface EventLogEntry {
 
 function DevUI({ port, wsPort, autoOpen, live }: DevUIProps) {
   const { exit } = useApp()
+  // Headless guard: agents and CI run `eeko dev` without a TTY; Ink's raw
+  // mode (keyboard shortcuts) is unavailable there, but the servers must
+  // still run. `eeko test` / the browser remain the event-injection paths.
+  const { isRawModeSupported } = useStdin()
   const [serverStatus, setServerStatus] = useState<'starting' | 'ready' | 'error'>('starting')
   const [wsClients, setWsClients] = useState(0)
   const [events, setEvents] = useState<EventLogEntry[]>([])
@@ -87,7 +92,10 @@ function DevUI({ port, wsPort, autoOpen, live }: DevUIProps) {
     if (eventDef && serverStatus === 'ready') {
       sendTestEvent(eventDef)
     }
-  })
+    // NB: Ink reports isRawModeSupported as stdin.isTTY, which is undefined
+    // (not false) when headless — and useInput only skips raw mode on a
+    // strict `isActive === false`. Coerce.
+  }, { isActive: isRawModeSupported === true })
 
   useEffect(() => {
     let mounted = true
@@ -144,6 +152,15 @@ function DevUI({ port, wsPort, autoOpen, live }: DevUIProps) {
             if (mounted) {
               setActualPort(serverPort)
               setServerStatus('ready')
+              // Record the actual bound ports so `eeko test` (run from
+              // another terminal) finds this server even when the defaults
+              // were taken and the port walk moved us.
+              writeDevDescriptor(process.cwd(), {
+                wsPort: ws.port,
+                httpPort: serverPort,
+                pid: process.pid,
+                startedAt: new Date().toISOString(),
+              })
               if (autoOpen) {
                 open(`http://127.0.0.1:${serverPort}`)
               }
@@ -208,6 +225,7 @@ function DevUI({ port, wsPort, autoOpen, live }: DevUIProps) {
 
     return () => {
       mounted = false
+      removeDevDescriptor(process.cwd())
       liveBridgeRef.current?.close()
       wsRef.current?.close()
       serverRef.current?.close()

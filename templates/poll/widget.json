@@ -1,0 +1,313 @@
+{
+  "name": "Poll",
+  "componentType": "poll",
+  "fields": [
+    {
+      "key": "title",
+      "label": "Title",
+      "type": "text",
+      "scope": "global",
+      "defaultValue": "Poll"
+    },
+    {
+      "key": "fontFamily",
+      "label": "Font",
+      "type": "font",
+      "scope": "global",
+      "defaultValue": "system-ui, sans-serif"
+    },
+    {
+      "key": "backgroundColor",
+      "label": "Background",
+      "type": "color",
+      "scope": "global",
+      "defaultValue": "#1e1e2e"
+    },
+    {
+      "key": "trackColor",
+      "label": "Track colour",
+      "type": "color",
+      "scope": "global",
+      "defaultValue": "rgba(255,255,255,0.15)"
+    },
+    {
+      "key": "textColor",
+      "label": "Text colour",
+      "type": "color",
+      "scope": "global",
+      "defaultValue": "#ffffff"
+    },
+    {
+      "key": "accentColor",
+      "label": "Bar colour",
+      "type": "color",
+      "scope": "global",
+      "defaultValue": "#60a5fa"
+    }
+  ],
+  "interactions": {
+    "version": 1,
+    "on": {
+      "component_sync": [
+        {
+          "op": "set-text",
+          "target": "el-opt-a-label",
+          "from": {
+            "from": "optionAText"
+          }
+        },
+        {
+          "op": "set-style-ratio",
+          "target": "el-opt-a-bar",
+          "prop": "width",
+          "numerator": {
+            "from": "optionAVotes"
+          },
+          "denominator": {
+            "from": "totalVotes"
+          },
+          "unit": "%",
+          "clamp": true
+        },
+        {
+          "op": "set-text",
+          "target": "el-opt-a-pct",
+          "from": {
+            "from": "optionAPct"
+          }
+        },
+        {
+          "op": "set-text",
+          "target": "el-opt-b-label",
+          "from": {
+            "from": "optionBText"
+          }
+        },
+        {
+          "op": "set-style-ratio",
+          "target": "el-opt-b-bar",
+          "prop": "width",
+          "numerator": {
+            "from": "optionBVotes"
+          },
+          "denominator": {
+            "from": "totalVotes"
+          },
+          "unit": "%",
+          "clamp": true
+        },
+        {
+          "op": "set-text",
+          "target": "el-opt-b-pct",
+          "from": {
+            "from": "optionBPct"
+          }
+        },
+        {
+          "op": "show",
+          "target": "el-opt-c",
+          "onlyIf": {
+            "from": "optionCText",
+            "op": "present"
+          }
+        },
+        {
+          "op": "set-text",
+          "target": "el-opt-c-label",
+          "from": {
+            "from": "optionCText"
+          }
+        },
+        {
+          "op": "set-style-ratio",
+          "target": "el-opt-c-bar",
+          "prop": "width",
+          "numerator": {
+            "from": "optionCVotes"
+          },
+          "denominator": {
+            "from": "totalVotes"
+          },
+          "unit": "%",
+          "clamp": true
+        },
+        {
+          "op": "set-text",
+          "target": "el-opt-c-pct",
+          "from": {
+            "from": "optionCPct"
+          }
+        },
+        {
+          "op": "show",
+          "target": "el-opt-d",
+          "onlyIf": {
+            "from": "optionDText",
+            "op": "present"
+          }
+        },
+        {
+          "op": "set-text",
+          "target": "el-opt-d-label",
+          "from": {
+            "from": "optionDText"
+          }
+        },
+        {
+          "op": "set-style-ratio",
+          "target": "el-opt-d-bar",
+          "prop": "width",
+          "numerator": {
+            "from": "optionDVotes"
+          },
+          "denominator": {
+            "from": "totalVotes"
+          },
+          "unit": "%",
+          "clamp": true
+        },
+        {
+          "op": "set-text",
+          "target": "el-opt-d-pct",
+          "from": {
+            "from": "optionDPct"
+          }
+        }
+      ],
+      "component_update": [
+        {
+          "op": "set-text",
+          "target": "el-opt-a-label",
+          "from": {
+            "from": "optionAText"
+          }
+        },
+        {
+          "op": "set-style-ratio",
+          "target": "el-opt-a-bar",
+          "prop": "width",
+          "numerator": {
+            "from": "optionAVotes"
+          },
+          "denominator": {
+            "from": "totalVotes"
+          },
+          "unit": "%",
+          "clamp": true
+        },
+        {
+          "op": "set-text",
+          "target": "el-opt-a-pct",
+          "from": {
+            "from": "optionAPct"
+          }
+        },
+        {
+          "op": "set-text",
+          "target": "el-opt-b-label",
+          "from": {
+            "from": "optionBText"
+          }
+        },
+        {
+          "op": "set-style-ratio",
+          "target": "el-opt-b-bar",
+          "prop": "width",
+          "numerator": {
+            "from": "optionBVotes"
+          },
+          "denominator": {
+            "from": "totalVotes"
+          },
+          "unit": "%",
+          "clamp": true
+        },
+        {
+          "op": "set-text",
+          "target": "el-opt-b-pct",
+          "from": {
+            "from": "optionBPct"
+          }
+        },
+        {
+          "op": "show",
+          "target": "el-opt-c",
+          "onlyIf": {
+            "from": "optionCText",
+            "op": "present"
+          }
+        },
+        {
+          "op": "set-text",
+          "target": "el-opt-c-label",
+          "from": {
+            "from": "optionCText"
+          }
+        },
+        {
+          "op": "set-style-ratio",
+          "target": "el-opt-c-bar",
+          "prop": "width",
+          "numerator": {
+            "from": "optionCVotes"
+          },
+          "denominator": {
+            "from": "totalVotes"
+          },
+          "unit": "%",
+          "clamp": true
+        },
+        {
+          "op": "set-text",
+          "target": "el-opt-c-pct",
+          "from": {
+            "from": "optionCPct"
+          }
+        },
+        {
+          "op": "show",
+          "target": "el-opt-d",
+          "onlyIf": {
+            "from": "optionDText",
+            "op": "present"
+          }
+        },
+        {
+          "op": "set-text",
+          "target": "el-opt-d-label",
+          "from": {
+            "from": "optionDText"
+          }
+        },
+        {
+          "op": "set-style-ratio",
+          "target": "el-opt-d-bar",
+          "prop": "width",
+          "numerator": {
+            "from": "optionDVotes"
+          },
+          "denominator": {
+            "from": "totalVotes"
+          },
+          "unit": "%",
+          "clamp": true
+        },
+        {
+          "op": "set-text",
+          "target": "el-opt-d-pct",
+          "from": {
+            "from": "optionDPct"
+          }
+        }
+      ]
+    }
+  },
+  "globalConfig": {
+    "title": "Poll",
+    "fontFamily": "system-ui, sans-serif",
+    "backgroundColor": "#1e1e2e",
+    "trackColor": "rgba(255,255,255,0.15)",
+    "textColor": "#ffffff",
+    "accentColor": "#60a5fa"
+  }
+}
