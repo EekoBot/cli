@@ -7,7 +7,7 @@
  * `eeko publish`.
  */
 
-import { Command } from 'commander'
+import { Command, Option } from 'commander'
 import React, { useEffect, useState } from 'react'
 import { render, Box, Text, useApp } from 'ink'
 import { useInputWhenInteractive } from '../hooks/use-input-when-interactive.js'
@@ -412,7 +412,7 @@ export const initCommand = new Command('init')
     '--account <idOrSlug>',
     "Create the widget under a merchant account you belong to. Pass 'personal' to skip the account picker and create a personal widget — 'personal' is reserved and always means your user, even if a merchant account's slug is literally 'personal'"
   )
-  .option('--api-host <url>', 'Override the nexus-api base URL')
+  .addOption(new Option('--api-host <url>', 'Override the API base URL (internal/staging use)').hideHelp())
   .action(
     (
       name: string | undefined,

@@ -8,7 +8,7 @@
  * the account's catalog widgets and lets you pick one.
  */
 
-import { Command } from 'commander'
+import { Command, Option } from 'commander'
 import React from 'react'
 import { render, Box, Text } from 'ink'
 import { useInputWhenInteractive } from '../hooks/use-input-when-interactive.js'
@@ -93,7 +93,7 @@ export const cloneCommand = new Command('clone')
   .argument('[componentId]', 'The widget/component id to clone (omit with --account to pick one)')
   .argument('[dir]', 'Target directory (defaults to the component id)')
   .option('--account <idOrSlug>', "Pick a widget from a merchant account's catalog")
-  .option('--api-host <url>', 'Override the nexus-api base URL')
+  .addOption(new Option('--api-host <url>', 'Override the API base URL (internal/staging use)').hideHelp())
   .action(
     async (
       componentId: string | undefined,
