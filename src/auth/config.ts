@@ -15,6 +15,11 @@ export const AUTH_CONFIG = {
     // nexus-api base URL — the CLI's authed REST surface.
     baseUrl: (process.env.EEKO_API_HOST || 'https://api.eeko.app').replace(/\/$/, ''),
   },
+  assets: {
+    // asset-management-service base URL — the public upload + view surface
+    // (the merchant app hits this directly too; the identity JWT authenticates).
+    baseUrl: (process.env.EEKO_ASSETS_URL || 'https://assets.eeko.app').replace(/\/$/, ''),
+  },
   auth: {
     // Loopback redirect port range (RFC 8252 §7.3 / §8.3 — localhost IP literal).
     redirectPortStart: 3000,

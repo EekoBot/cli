@@ -227,6 +227,40 @@ export async function createProject(
   })
 }
 
+export interface ProjectView {
+  id: string
+  name: string
+  thumbnail_url?: string | null
+  gallery?: string[] | null
+  [key: string]: unknown
+}
+
+/** Read a project the caller owns (GET /api/projects/:id) — used to append to its gallery. */
+export async function getProject(
+  token: string,
+  projectId: string,
+  apiBase: string = DEFAULT_API_BASE
+): Promise<ProjectView> {
+  return apiRequest<ProjectView>(apiBase, `/api/projects/${projectId}`, token)
+}
+
+/**
+ * Set a project's marketplace media (thumbnail / gallery) via the existing
+ * PATCH /api/projects/:id route (string-or-null thumbnail_url, ≤10-item gallery).
+ * The URLs are public asset view URLs from uploadAssetFile.
+ */
+export async function updateProjectMedia(
+  token: string,
+  projectId: string,
+  updates: { thumbnail_url?: string | null; gallery?: string[] | null },
+  apiBase: string = DEFAULT_API_BASE
+): Promise<{ project: ProjectView }> {
+  return apiRequest<{ project: ProjectView }>(apiBase, `/api/projects/${projectId}`, token, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  })
+}
+
 /**
  * List the merchant accounts the caller is a member of.
  */

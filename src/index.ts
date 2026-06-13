@@ -34,6 +34,7 @@ import { agentsMdCommand } from './commands/agents-md.js'
 import { automationCommand } from './commands/automation-init.js'
 import { projectCommand } from './commands/project-init.js'
 import { widgetCommand } from './commands/widget-init.js'
+import { assetCommand } from './commands/asset.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const pkg = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf-8'))
@@ -49,6 +50,7 @@ program.addCommand(widgetCommand)
 program.addCommand(automationCommand)
 // `eeko init` — quick standalone widget (no project); the legacy one-shot.
 program.addCommand(initCommand)
+program.addCommand(assetCommand)
 program.addCommand(cloneCommand)
 program.addCommand(devCommand)
 program.addCommand(testCommand)

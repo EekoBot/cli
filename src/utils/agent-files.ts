@@ -87,6 +87,16 @@ my-project/
 2. \`eeko build\` validates it (field-level errors if the shape is wrong).
 3. \`eeko publish\` makes the automation live. Automations are **save = live** — there is no separate promote for them (a catalog shell can't fire until a streamer installs and binds it, so "live" is harmless). The widget side still uses draft → promote.
 
+## Marketplace images (optional)
+
+A catalog project can carry a **thumbnail** (browse card) and a **gallery** (detail page, up to 10 images). From the project root:
+
+- \`eeko project thumbnail <file-or-url>\` — set the cover image (a local PNG/JPG/WebP/GIF is uploaded automatically, then assigned; or pass an existing asset URL). \`--clear\` removes it.
+- \`eeko project gallery <files-or-urls...>\` — set the gallery (replaces it; \`--append\` adds to it, \`--clear\` empties it).
+- \`eeko asset upload <file> --public\` — the lower-level primitive; uploads an image and prints its URL.
+
+SVG is not allowed; images are uploaded public so the marketplace can render them. Only add images you were given or told to use — don't invent cover art.
+
 ## Human-only steps — never run these yourself
 
 - \`eeko promote\` (draft → main, i.e. going live) for the **widget** is the owner's decision.
