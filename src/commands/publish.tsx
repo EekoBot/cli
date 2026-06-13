@@ -17,7 +17,7 @@ import { readFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { getValidAccessToken } from '../auth/session.js'
 import { artifactRef, loadEekoConfig } from '../utils/config.js'
-import { commitDraft, commitAutomationDraft } from '../api/client.js'
+import { commitDraft, commitAutomationDraft, syncAutomationDraft } from '../api/client.js'
 import { isGitRepo, stageAndCommit, pushHead } from '../utils/git.js'
 
 type PublishState = 'preparing' | 'publishing' | 'done' | 'error'
@@ -67,6 +67,10 @@ function PublishUI() {
   const [error, setError] = useState<string | null>(null)
   const [artifactId, setArtifactId] = useState<string | null>(null)
   const [detail, setDetail] = useState<string>('')
+  // Automations are "save = live" (config_blob is the source of truth), so a
+  // successful publish makes them live — no separate promote needed. Widgets
+  // stage to draft and need a promote.
+  const [isLive, setIsLive] = useState(false)
 
   useEffect(() => {
     if (state !== 'preparing') return
@@ -121,6 +125,16 @@ function PublishUI() {
           const r = await commitDraft(token, ref.id, files, message, 'draft', config.apiHost)
           setDetail(`commit ${r.sha ?? r.commitSha ?? ''} → draft`)
         }
+
+        // For an automation, the git push / commit only updates the artifact;
+        // config_blob (the live source of truth the dispatcher + Studio read)
+        // must be synced from it. Do that now so the edit is live immediately,
+        // mirroring the UI's synchronous save.
+        if (ref.kind === 'automation') {
+          await syncAutomationDraft(token, ref.id, config.apiHost)
+          setIsLive(true)
+        }
+
         setState('done')
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to publish')
@@ -161,10 +175,14 @@ function PublishUI() {
 
       {state === 'done' && artifactId && (
         <Box flexDirection="column">
-          <Text color="green">✓ Published to draft</Text>
+          <Text color="green">{isLive ? '✓ Published — automation is live' : '✓ Published to draft'}</Text>
           <Box marginTop={1} flexDirection="column">
             <Text dimColor>{detail}</Text>
-            <Text dimColor>Run `eeko promote` to publish live.</Text>
+            <Text dimColor>
+              {isLive
+                ? 'Config synced; the automation fires now. (Marketplace releases are cut in the merchant app.)'
+                : 'Run `eeko promote` to publish live.'}
+            </Text>
           </Box>
         </Box>
       )}
