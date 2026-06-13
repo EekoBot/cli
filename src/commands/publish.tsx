@@ -131,7 +131,10 @@ function PublishUI() {
         // must be synced from it. Do that now so the edit is live immediately,
         // mirroring the UI's synchronous save.
         if (ref.kind === 'automation') {
-          await syncAutomationDraft(token, ref.id, config.apiHost)
+          const sync = await syncAutomationDraft(token, ref.id, config.apiHost)
+          if (!sync.ok) {
+            throw new Error('Pushed to draft, but syncing the live config failed — re-run `eeko publish`.')
+          }
           setIsLive(true)
         }
 
