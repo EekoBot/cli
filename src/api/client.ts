@@ -446,6 +446,25 @@ export async function promoteAutomationDraft(
 }
 
 /**
+ * Sync the automation's `config_blob` (the live source of truth) from its
+ * Artifacts repo at a ref (default: draft). For an automation, "save = live" —
+ * the git push alone doesn't make an edit live, so `eeko publish` calls this
+ * right after pushing so the change takes effect immediately.
+ */
+export async function syncAutomationDraft(
+  token: string,
+  automationId: string,
+  apiBase: string = DEFAULT_API_BASE
+): Promise<{ ok: boolean; sha?: string; ref?: string }> {
+  return apiRequest<{ ok: boolean; sha?: string; ref?: string }>(
+    apiBase,
+    `/api/automations/${automationId}/sync`,
+    token,
+    { method: 'POST', body: JSON.stringify({}) }
+  )
+}
+
+/**
  * Mint a draft-preview session so `eeko dev --live` can subscribe to the
  * developer's real Pusher channels for this widget.
  */

@@ -65,14 +65,14 @@ A widget needs an **automation** to fire it on a real event (a follow, a cheer, 
 
 1. From the widget directory, run \`eeko automation init\`. It creates the automation, clones it into \`../automation/\`, and scaffolds a starter \`automation.json\` already wired to this widget (a \`trigger_component\` action pointing at it).
 2. \`cd ../automation\` and edit \`automation.json\` — a \`{ triggers, conditions?, actions }\` config. Pick the trigger you want; use \`describe_trigger\` (MCP) for its exact shape. **Leave \`channelId\`/\`channelName\` empty** and reference no personal connections — catalog automations are *shells*, bound to the installer at install time. Keep the \`trigger_component\` action pointing at this project's widget.
-3. \`eeko build\` validates it (field-level errors if the shape is wrong); \`eeko publish\` pushes to draft; the owner promotes.
+3. \`eeko build\` validates it (field-level errors if the shape is wrong); \`eeko publish\` makes the automation live. Automations are **save = live** — there is no separate promote for them (a catalog shell can't fire until a streamer installs and binds it, so "live" is harmless). The widget side still uses draft → promote.
 
 ## Human-only steps — never run these yourself
 
-- \`eeko promote\` (draft → main, i.e. going live) is the owner's decision — for BOTH the widget and the automation.
+- \`eeko promote\` (draft → main, i.e. going live) for the **widget** is the owner's decision.
 - Marketplace releases are cut in the merchant app, never from this directory.
 
-Stop after \`eeko publish\` (widget and, if you added one, automation) and report what you built.
+Stop after \`eeko publish\` (the widget to draft, and the automation if you added one) and report what you built.
 
 ## MCP
 
