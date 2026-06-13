@@ -261,6 +261,48 @@ export async function updateProjectMedia(
   })
 }
 
+export interface Listing {
+  id: string
+  version: number
+  version_label: string
+  approval_state: string
+  [key: string]: unknown
+}
+
+/**
+ * Cut a marketplace release of an account-owned project. Name/description/
+ * category/tags/images all default from the project; the listing is created in
+ * `draft` (not public). Releases are free for now (the server rejects a paid
+ * price until checkout ships).
+ */
+export async function createListing(
+  token: string,
+  input: { projectId: string; versionLabel: string; changelog?: string },
+  apiBase: string = DEFAULT_API_BASE
+): Promise<{ ok: boolean; listing: Listing }> {
+  return apiRequest<{ ok: boolean; listing: Listing }>(apiBase, '/api/listings', token, {
+    method: 'POST',
+    body: JSON.stringify({ ...input, listingKind: 'marketplace' }),
+  })
+}
+
+/**
+ * Advance a listing through review. `submit_internal` on a solo account
+ * fast-forwards a draft straight to `submitted_eeko` (the admin queue). The
+ * final `approve` (→ live) is always an Eeko admin, never the CLI.
+ */
+export async function advanceListing(
+  token: string,
+  listingId: string,
+  action: 'submit_internal' | 'approve_internal' | 'submit_eeko' | 'retire',
+  apiBase: string = DEFAULT_API_BASE
+): Promise<{ approval_state?: string; state?: string; [key: string]: unknown }> {
+  return apiRequest(apiBase, `/api/listings/${listingId}/advance`, token, {
+    method: 'POST',
+    body: JSON.stringify({ action }),
+  })
+}
+
 /**
  * List the merchant accounts the caller is a member of.
  */
