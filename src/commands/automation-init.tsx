@@ -1,20 +1,19 @@
 /**
- * eeko automation init — create a new automation for a project and scaffold it
- * locally, alongside the project's widget.
+ * eeko automation init — add the automation side to a project and scaffold it
+ * locally.
  *
- * Run from a project's widget directory (or with `--project <id>`): the CLI
- * reads the local eeko.config.json to learn the projectId, the widget's
- * componentId, and any owning accountId, then:
- *   1. creates an `au-{id}` automation on that project (provisions its repo),
- *   2. clones it into a sibling `../automation/` dir (or `./<name>-automation/`),
- *   3. checks out the draft ref + wires the credential helper (same path as
- *      `eeko clone`),
- *   4. scaffolds a minimal shell `automation.json` wiring the sibling widget if
- *      the repo seed is empty,
- *   5. writes the automation dir's eeko.config.json.
+ * Run from a project root (created by `eeko project init`), or with
+ * `--project <id>`: the CLI resolves the projectId, creates an `au-{id}`
+ * automation on that project (inheriting the project's owner — personal or
+ * account), clones it into `./automation/`, and scaffolds a minimal shell
+ * `automation.json`. If the project has a sibling `widget/` side, the shell is
+ * wired to fire it; otherwise it scaffolds a utility automation (no widget).
  *
- * An automation is authored exactly like a widget: edit automation.json →
- * `eeko build` (validate) → `eeko publish` (push to draft) → `eeko promote`.
+ * Also supports the legacy flat layout — run from a widget dir and it clones the
+ * sibling `../automation/`, wiring that widget.
+ *
+ * An automation is authored like a widget: edit automation.json → `eeko build`
+ * (validate) → `eeko publish` (save = live; no separate promote).
  */
 
 import { Command, Option } from 'commander'
@@ -28,72 +27,106 @@ import { writeFile } from 'fs/promises'
 import { getValidAccessToken } from '../auth/session.js'
 import { createAutomation } from '../api/client.js'
 import { AUTH_CONFIG } from '../auth/config.js'
-import { loadEekoConfig, writeEekoConfig } from '../utils/config.js'
+import { loadEekoConfig, loadProjectConfig, writeEekoConfig } from '../utils/config.js'
 import { writeAgentFiles } from '../utils/agent-files.js'
 import { cloneRepo, checkout, stageAndCommit } from '../utils/git.js'
 
 const AUTOMATION_FILENAME = 'automation.json'
+const AUTOMATION_DIRNAME = 'automation'
+const WIDGET_DIRNAME = 'widget'
 
 /**
- * The project context resolved from a widget directory's eeko.config.json.
- * `projectId` is required to create an automation; the others wire the shell.
+ * The project context an automation binds to. `projectId` is required; the
+ * sibling widget's `componentId` (when the project has a widget side) wires the
+ * shell's `trigger_component` action. `cloneDir` is where the `au-{id}` lands.
  */
 interface ProjectContext {
   projectId: string
   componentId?: string
   accountId?: string
   apiHost?: string
-  /** Directory the widget config was read from. */
-  widgetDir: string
+  /** Directory to clone the automation into. */
+  cloneDir: string
+}
+
+/** The componentId of a sibling `widget/` side under a project root, if present. */
+function siblingWidgetComponentId(projectRoot: string): string | undefined {
+  const widgetConfig = loadEekoConfig(path.join(projectRoot, WIDGET_DIRNAME))
+  return widgetConfig?.componentId
 }
 
 /**
- * Resolve the project context from the current (widget) directory's config, or
- * from an explicit `--project` override.
+ * Resolve the project to attach the automation to, across three layouts:
+ *   - `--project <id>`            → clone `./automation/` under cwd.
+ *   - PROJECT ROOT (project init) → cwd has projectId, no artifact id; clone
+ *     `./automation/`, wire any sibling `./widget/`.
+ *   - LEGACY FLAT widget dir      → cwd config has componentId; clone the
+ *     sibling `../automation/` and wire this widget (the pre-triad layout).
  */
 function resolveProjectContext(opts: {
   project?: string
   apiHost?: string
 }): { ctx?: ProjectContext; error?: string } {
-  const widgetDir = process.cwd()
-  const config = loadEekoConfig(widgetDir)
+  const cwd = process.cwd()
 
-  const projectId = opts.project ?? config?.projectId
-  if (!projectId) {
+  if (opts.project) {
     return {
-      error:
-        'No projectId found. Run `eeko automation init` from a widget directory whose eeko.config.json carries a projectId, or pass --project <id>.',
+      ctx: {
+        projectId: opts.project,
+        componentId: siblingWidgetComponentId(cwd),
+        apiHost: opts.apiHost,
+        cloneDir: path.join(cwd, AUTOMATION_DIRNAME),
+      },
+    }
+  }
+
+  // Legacy flat layout: cwd IS a widget dir (its config carries componentId).
+  const sideConfig = loadEekoConfig(cwd)
+  if (sideConfig?.componentId && sideConfig.projectId) {
+    return {
+      ctx: {
+        projectId: sideConfig.projectId,
+        componentId: sideConfig.componentId,
+        accountId: sideConfig.accountId,
+        apiHost: opts.apiHost ?? sideConfig.apiHost,
+        cloneDir: path.join(path.dirname(cwd), AUTOMATION_DIRNAME),
+      },
+    }
+  }
+
+  // Project-root layout (the triad): projectId, no artifact id.
+  const projConfig = loadProjectConfig(cwd)
+  if (projConfig?.projectId) {
+    return {
+      ctx: {
+        projectId: projConfig.projectId,
+        componentId: siblingWidgetComponentId(cwd),
+        accountId: projConfig.accountId,
+        apiHost: opts.apiHost ?? projConfig.apiHost,
+        cloneDir: path.join(cwd, AUTOMATION_DIRNAME),
+      },
     }
   }
 
   return {
-    ctx: {
-      projectId,
-      componentId: config?.componentId,
-      accountId: config?.accountId,
-      apiHost: opts.apiHost ?? config?.apiHost,
-      widgetDir,
-    },
+    error:
+      'No project found. Run `eeko automation init` from a project root (after `eeko project init`) or a widget dir, or pass --project <id>.',
   }
 }
 
 /**
- * Where to clone the automation. In the recognizable layout (the widget lives
- * in a project dir), clone into a sibling `../automation/`. Otherwise fall back
- * to `./<name>-automation/` under the cwd and tell the user.
+ * Where to clone the automation: the context's `cloneDir`, falling back to a
+ * `<slug>-automation/` sibling when that dir is already taken.
  */
 function resolveTargetDir(
   ctx: ProjectContext,
   name: string
 ): { dir: string; sibling: boolean } {
-  const parent = path.dirname(ctx.widgetDir)
-  const sibling = path.join(parent, 'automation')
-  if (!existsSync(sibling)) {
-    return { dir: sibling, sibling: true }
+  if (!existsSync(ctx.cloneDir)) {
+    return { dir: ctx.cloneDir, sibling: true }
   }
-  // Sibling taken — fall back to a named dir under the cwd.
   const slug = slugify(name)
-  return { dir: path.join(ctx.widgetDir, `${slug}-automation`), sibling: false }
+  return { dir: path.join(path.dirname(ctx.cloneDir), `${slug}-automation`), sibling: false }
 }
 
 function slugify(s: string): string {
@@ -131,20 +164,27 @@ function seedIsEmpty(dir: string): boolean {
 }
 
 /**
- * A minimal shell automation wiring the sibling widget. The trigger defaults to
- * `twitch_follow` (the agent picks the real one); `trigger_component` is
- * pre-set to the widget's componentId (shell validation exempts it).
+ * A minimal shell automation. Both forms default the trigger to `twitch_follow`
+ * (the agent picks the real one via `describe_trigger`) with an empty channelId
+ * (bound to the installer at install time).
+ *
+ *   - With a sibling widget → a `trigger_component` action pre-set to its
+ *     componentId (shell validation exempts it), so the automation fires the
+ *     widget.
+ *   - Without a widget (a utility/automation-only project) → a `send_chat_message`
+ *     placeholder action, since the shell schema requires at least one action.
+ *     The agent replaces it with the real action (moderation, variable, etc.).
  */
 function shellAutomation(componentId: string | undefined): string {
-  const automation = {
-    triggers: [{ type: 'twitch_follow', channelId: '' }],
-    actions: [
-      {
-        type: 'trigger_component',
-        componentId: componentId ?? '',
-      },
-    ],
-  }
+  const automation = componentId
+    ? {
+        triggers: [{ type: 'twitch_follow', channelId: '' }],
+        actions: [{ type: 'trigger_component', componentId }],
+      }
+    : {
+        triggers: [{ type: 'twitch_follow', channelId: '' }],
+        actions: [{ type: 'send_chat_message', message: 'Thanks for the follow!' }],
+      }
   return JSON.stringify(automation, null, 2) + '\n'
 }
 
@@ -206,9 +246,9 @@ async function createAndClone(
   return { dir, sibling, automationId: created.automationId }
 }
 
-/** Best-effort default name from the widget config / dir. */
-function defaultAutomationName(ctx: ProjectContext): string {
-  const base = path.basename(ctx.widgetDir)
+/** Best-effort default name from the current project/widget directory. */
+function defaultAutomationName(_ctx: ProjectContext): string {
+  const base = path.basename(process.cwd())
   return `${base} automation`
 }
 
@@ -304,7 +344,7 @@ function AutomationInitUI({ initial }: { initial: InitOptions }) {
 }
 
 const automationInitCommand = new Command('init')
-  .description("Create a new automation for this widget's project and scaffold it locally")
+  .description("Add the automation side to the current directory's project")
   .option('--name <name>', 'Automation name (defaults to the project/widget name + " automation")')
   .option('--project <id>', 'Project id to attach the automation to (defaults to the local config)')
   .addOption(

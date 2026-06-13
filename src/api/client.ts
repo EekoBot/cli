@@ -185,10 +185,43 @@ export async function createComponent(
     /** Create the widget account-owned (membership-checked server-side). */
     ownerKind?: 'user' | 'account'
     ownerId?: string
+    /**
+     * Attach the widget to an existing project (inheriting its owner) instead
+     * of creating a standalone widget / auto-creating a project. Set by
+     * `eeko widget init`; supersedes ownerKind/ownerId server-side.
+     */
+    projectId?: string
   },
   apiBase: string = DEFAULT_API_BASE
 ): Promise<CreateComponentResult> {
   return apiRequest<CreateComponentResult>(apiBase, '/api/components', token, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export interface CreateProjectResult {
+  ok: boolean
+  project: {
+    id: string
+    name: string
+    user_id?: string
+    owner_kind?: string
+    owner_id?: string
+  }
+}
+
+/**
+ * Create a project (the catalog/authoring container). With `accountId` it is an
+ * account-owned project (membership-checked server-side); without, a personal
+ * one. The widget and automation sides inherit this owner.
+ */
+export async function createProject(
+  token: string,
+  input: { name: string; description?: string; accountId?: string },
+  apiBase: string = DEFAULT_API_BASE
+): Promise<CreateProjectResult> {
+  return apiRequest<CreateProjectResult>(apiBase, '/api/projects', token, {
     method: 'POST',
     body: JSON.stringify(input),
   })

@@ -32,6 +32,8 @@ import { promoteCommand } from './commands/promote.js'
 import { credentialHelperCommand } from './commands/credential-helper.js'
 import { agentsMdCommand } from './commands/agents-md.js'
 import { automationCommand } from './commands/automation-init.js'
+import { projectCommand } from './commands/project-init.js'
+import { widgetCommand } from './commands/widget-init.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const pkg = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf-8'))
@@ -40,6 +42,12 @@ const program = new Command()
 
 program.name('eeko').description('CLI for local Eeko widget development').version(pkg.version)
 
+// The project-first triad: `eeko project init` creates the container, then
+// `eeko widget init` / `eeko automation init` add each first-class side.
+program.addCommand(projectCommand)
+program.addCommand(widgetCommand)
+program.addCommand(automationCommand)
+// `eeko init` — quick standalone widget (no project); the legacy one-shot.
 program.addCommand(initCommand)
 program.addCommand(cloneCommand)
 program.addCommand(devCommand)
@@ -50,7 +58,6 @@ program.addCommand(logoutCommand)
 program.addCommand(whoamiCommand)
 program.addCommand(publishCommand)
 program.addCommand(promoteCommand)
-program.addCommand(automationCommand)
 program.addCommand(agentsMdCommand)
 // Hidden — invoked by git, not humans.
 program.addCommand(credentialHelperCommand, { hidden: true })
