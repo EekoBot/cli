@@ -368,7 +368,16 @@ export function createFollowPayload() {
  * so declarative starters' bindings (displayName, formattedAmount, …) resolve
  * out of the box; `--data` overrides or extends.
  */
-export function createTriggerPayload(variantFields?: Record<string, unknown>) {
+export function createTriggerPayload(
+  variantFields?: Record<string, unknown>,
+  opts?: { defaults?: boolean }
+) {
+  // `--no-defaults` sends ONLY the provided fields, so an author can exercise
+  // the displayName-absent fallback path and avoid a stray default `message`
+  // leaking into alerts that don't expect one.
+  if (opts?.defaults === false) {
+    return { ...variantFields }
+  }
   return {
     username: 'testuser',
     displayName: 'TestUser',
@@ -379,6 +388,25 @@ export function createTriggerPayload(variantFields?: Record<string, unknown>) {
     message: 'This is a test trigger',
     ...variantFields,
   }
+}
+
+/** `variable_updated` — handler reads `data.variable.{key,value,previousValue}`. */
+export function createVariableUpdatedPayload(
+  key: string,
+  value: unknown,
+  previousValue?: unknown
+) {
+  return { variable: { key, value, previousValue } }
+}
+
+/** `component_sync` — a full re-sync; payload is the flat config/state record. */
+export function createSyncPayload(data?: Record<string, unknown>) {
+  return { ...data }
+}
+
+/** `component_dismiss` — hide the current instance early; payload is optional data. */
+export function createDismissPayload(data?: Record<string, unknown>) {
+  return { ...data }
 }
 
 export function createMountPayload() {

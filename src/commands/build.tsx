@@ -1,9 +1,13 @@
 /**
- * eeko build — validate the widget project locally.
+ * eeko build — validate the artifact in the current directory locally.
  *
- * File presence + manifest schema + interactions structure + contract lint,
- * via the shared core in utils/validate-project (same @eeko/sdk primitives
- * the platform uses; nexus-api stays authoritative on commit).
+ * Widget dirs: file presence + manifest schema + interactions structure +
+ * contract lint, via the shared core in utils/validate-project (same @eeko/sdk
+ * primitives the platform uses).
+ *
+ * Automation dirs: parse automation.json and POST it to nexus-api's
+ * validate-draft endpoint, printing any field-level issues. nexus-api stays
+ * authoritative on commit either way.
  *
  * `--json` emits the structured report on stdout (no UI) — the surface agents
  * iterate against.
@@ -18,6 +22,11 @@ import {
   CANONICAL_FILES,
   type ProjectValidation,
 } from '../utils/validate-project.js'
+import {
+  validateAutomation,
+  type AutomationValidation,
+} from '../utils/validate-automation.js'
+import { artifactRef, loadEekoConfig } from '../utils/config.js'
 
 function BuildUI() {
   const [report, setReport] = useState<ProjectValidation | null>(null)
@@ -99,10 +108,69 @@ function BuildUI() {
   )
 }
 
+function AutomationBuildUI() {
+  const [report, setReport] = useState<AutomationValidation | null>(null)
+
+  useEffect(() => {
+    validateAutomation().then((result) => {
+      setReport(result)
+      setTimeout(() => process.exit(result.ok ? 0 : 1), 500)
+    })
+  }, [])
+
+  if (!report) {
+    return (
+      <Box padding={1}>
+        <Text color="yellow">
+          <Spinner type="dots" />
+        </Text>
+        <Text> Validating automation…</Text>
+      </Box>
+    )
+  }
+
+  return (
+    <Box flexDirection="column" padding={1}>
+      <Box marginBottom={1}>
+        <Text bold color="cyan">
+          Eeko Automation Validation
+        </Text>
+      </Box>
+
+      {report.issues.map((issue, i) => (
+        <Text key={`a${i}`} color="red">
+          ✖ {issue.field ? `${issue.field}: ` : ''}
+          {issue.message} <Text dimColor>[{issue.stage}]</Text>
+        </Text>
+      ))}
+
+      <Box marginTop={1}>
+        {report.ok ? (
+          <Text color="green">✓ Automation is valid</Text>
+        ) : (
+          <Text color="red">Automation validation failed</Text>
+        )}
+      </Box>
+    </Box>
+  )
+}
+
 export const buildCommand = new Command('build')
-  .description('Validate the widget: files, manifest schema, interactions, contract lint')
+  .description('Validate the artifact: widget files/manifest/lint, or automation.json')
   .option('--json', 'Emit the structured validation report on stdout')
   .action(async (opts: { json?: boolean }) => {
+    const ref = artifactRef(loadEekoConfig() ?? {})
+
+    if (ref?.kind === 'automation') {
+      if (opts.json) {
+        const report = await validateAutomation()
+        process.stdout.write(JSON.stringify(report, null, 2) + '\n')
+        process.exit(report.ok ? 0 : 1)
+      }
+      render(<AutomationBuildUI />)
+      return
+    }
+
     if (opts.json) {
       const report = await validateProject()
       process.stdout.write(JSON.stringify(report, null, 2) + '\n')

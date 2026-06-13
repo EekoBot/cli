@@ -59,16 +59,24 @@ This directory is one Eeko widget: a git repo whose \`draft\` branch is the work
 3. \`eeko dev --no-open\` (runs headless; leave it running) then, from another shell, \`eeko test trigger\` / \`eeko test chat\` / \`eeko test all-chat\` — simulated events with production payload shapes. The dev server prints its URL; \`.eeko-dev.json\` records the live ports.
 4. \`eeko publish\` — commits and pushes to the \`draft\` ref for human review in Studio.
 
+## Adding an automation (the trigger → widget wiring)
+
+A widget needs an **automation** to fire it on a real event (a follow, a cheer, a sub …). The automation is authored exactly like the widget — its own git artifact, edited / validated / pushed the same way — and lives in a sibling \`automation/\` directory.
+
+1. From the widget directory, run \`eeko automation init\`. It creates the automation, clones it into \`../automation/\`, and scaffolds a starter \`automation.json\` already wired to this widget (a \`trigger_component\` action pointing at it).
+2. \`cd ../automation\` and edit \`automation.json\` — a \`{ triggers, conditions?, actions }\` config. Pick the trigger you want; use \`describe_trigger\` (MCP) for its exact shape. **Leave \`channelId\`/\`channelName\` empty** and reference no personal connections — catalog automations are *shells*, bound to the installer at install time. Keep the \`trigger_component\` action pointing at this project's widget.
+3. \`eeko build\` validates it (field-level errors if the shape is wrong); \`eeko publish\` pushes to draft; the owner promotes.
+
 ## Human-only steps — never run these yourself
 
-- \`eeko promote\` (draft → main, i.e. going live) is the owner's decision.
+- \`eeko promote\` (draft → main, i.e. going live) is the owner's decision — for BOTH the widget and the automation.
 - Marketplace releases are cut in the merchant app, never from this directory.
 
-Stop after \`eeko publish\` and report what you built.
+Stop after \`eeko publish\` (widget and, if you added one, automation) and report what you built.
 
 ## MCP
 
-\`.mcp.json\` connects you to Eeko's platform MCP server (${MCP_PLATFORM_URL}). Use \`describe_trigger\` for the exact data points a platform trigger carries before binding payload fields the guide doesn't list. Discovery tools (\`list_trigger_types\`, \`list_action_types\`, \`list_user_assets\`) cover what exists on the account. If the MCP server is unreachable, the guide's documented common dataPoints are a safe baseline — prefer them over invented field names. (The scaffolded \`script.js\` comment mentions \`list_trigger_types\`; via MCP that is the same-named tool.)
+\`.mcp.json\` connects you to Eeko's platform MCP server (${MCP_PLATFORM_URL}). Use \`describe_trigger\` for the exact data points a platform trigger carries before binding payload fields the guide doesn't list, and \`list_action_types\` for action shapes when editing \`automation.json\`. Discovery tools (\`list_trigger_types\`, \`list_accounts\`, \`list_user_assets\`) cover what exists on the account. If the MCP server is unreachable, the guide's documented common dataPoints are a safe baseline — prefer them over invented field names.
 
 ---
 

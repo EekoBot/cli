@@ -138,7 +138,14 @@ async function createAndScaffold(
 
   setStatus(`Scaffolding the ${opts.template} template…`)
   await scaffoldTemplate(opts.template, targetDir, safeName)
-  writeEekoConfig(targetDir, { componentId, apiHost: opts.apiHost, accountId: opts.accountId })
+  // Persist the catalog projectId (account widgets auto-attach to a project)
+  // so `eeko automation init` can wire the automation side to the same project.
+  writeEekoConfig(targetDir, {
+    componentId,
+    projectId: created.projectId,
+    apiHost: opts.apiHost,
+    accountId: opts.accountId,
+  })
   await writeFile(path.join(targetDir, 'package.json'), packageJson(safeName))
   await writeAgentFiles(targetDir)
   await stageAndCommit(targetDir, `init: scaffold ${opts.template}`)

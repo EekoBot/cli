@@ -8,18 +8,33 @@ describe('toEnvelope', () => {
     expect(toEnvelope('component_trigger', env)).toEqual(env)
   })
 
-  it('lifts data fields under payload for {type, context, ...data} test payloads', () => {
+  it('keeps the whole UnifiedMessage in payload for chat_message (prod parity)', () => {
+    // Production (chat-relay) publishes the full UnifiedMessage — incl. its own
+    // `type` + `context` — as the envelope payload, so a handler reads
+    // `msg.type` and `msg.context.platform`. toEnvelope must not strip them.
     const raw = {
       type: 'chat_message',
-      context: { platform: 'twitch' },
+      context: { platform: 'twitch', channelId: 'c1', messageId: 'm1' },
       user: { displayName: 'Ada' },
       message: { text: 'hi' },
     }
     expect(toEnvelope('chat_message', raw)).toEqual({
       type: 'chat_message',
-      context: { platform: 'twitch' },
-      payload: { user: { displayName: 'Ada' }, message: { text: 'hi' } },
+      context: { platform: 'twitch', channelId: 'c1' },
+      payload: raw,
     })
+  })
+
+  it('delivers a monetary/sub/follow UnifiedMessage whole on the chat_message event', () => {
+    const raw = {
+      type: 'monetary_event',
+      subType: 'bits',
+      context: { platform: 'twitch', channelId: 'c1' },
+      monetary: { amount: 100 },
+    }
+    const env = toEnvelope('chat_message', raw)
+    expect(env.type).toBe('chat_message')
+    expect(env.payload).toEqual(raw) // inner .type/.context preserved
   })
 
   it('wraps a bare data object as the payload, keyed by the event name', () => {

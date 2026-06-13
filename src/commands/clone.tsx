@@ -1,7 +1,8 @@
 /**
- * eeko clone — clone one of your Eeko widgets into a local git repo.
+ * eeko clone — clone one of your Eeko artifacts into a local git repo.
  *
- * Resolves the component to its Artifacts remote, wires the credential helper,
+ * Resolves the artifact (widget by default, automation with `--automation` or
+ * on a widget 404) to its Artifacts remote, wires the credential helper,
  * clones, checks out the draft branch, and writes eeko.config.json.
  *
  * With `--account <idOrSlug>` the component id can be omitted: the CLI lists
@@ -18,6 +19,7 @@ import { existsSync } from 'fs'
 import { getValidAccessToken } from '../auth/session.js'
 import {
   getComponentGit,
+  getAutomationGit,
   getAccounts,
   listAccountProjects,
   matchAccount,
@@ -89,20 +91,21 @@ function pickAccountWidget(
 }
 
 export const cloneCommand = new Command('clone')
-  .description('Clone one of your Eeko widgets into a local git repo')
-  .argument('[componentId]', 'The widget/component id to clone (omit with --account to pick one)')
-  .argument('[dir]', 'Target directory (defaults to the component id)')
+  .description('Clone one of your Eeko artifacts (widget or automation) into a local git repo')
+  .argument('[componentId]', 'The widget/automation id to clone (omit with --account to pick one)')
+  .argument('[dir]', 'Target directory (defaults to the artifact id)')
   .option('--account <idOrSlug>', "Pick a widget from a merchant account's catalog")
+  .option('--automation', 'Treat the id as an automation (au-) rather than a widget')
   .addOption(new Option('--api-host <url>', 'Override the API base URL (internal/staging use)').hideHelp())
   .action(
     async (
       componentId: string | undefined,
       dir: string | undefined,
-      opts: { account?: string; apiHost?: string }
+      opts: { account?: string; automation?: boolean; apiHost?: string }
     ) => {
       if (!componentId && !opts.account) {
         console.error(
-          'Usage: eeko clone <componentId> [dir]  (or omit the id with --account <idOrSlug> to pick a widget)'
+          'Usage: eeko clone <id> [dir]  (or omit the id with --account <idOrSlug> to pick a widget)'
         )
         process.exit(1)
       }
@@ -175,14 +178,70 @@ export const cloneCommand = new Command('clone')
         componentId = picked
       }
 
-      let info
+      // Normalize the widget/automation git endpoints into one shape. Widget
+      // is the default; `--automation`, an `au-` id, or a widget 404 routes to
+      // the automation endpoint.
+      type ResolvedArtifact = {
+        kind: 'component' | 'automation'
+        id: string
+        name: string
+        repoName: string
+        remote: string
+        host: string
+        refs: { draft: string; main: string }
+        owner?: { kind: 'user' | 'account'; id: string }
+      }
+
+      const resolveAutomation = async (): Promise<ResolvedArtifact> => {
+        const a = await getAutomationGit(token, componentId!, apiBase)
+        return {
+          kind: 'automation',
+          id: a.automationId,
+          name: a.name ?? a.repoName,
+          repoName: a.repoName,
+          remote: a.remote,
+          host: a.host,
+          refs: a.refs,
+          owner: a.owner,
+        }
+      }
+      const resolveComponent = async (): Promise<ResolvedArtifact> => {
+        const c = await getComponentGit(token, componentId!, apiBase)
+        return {
+          kind: 'component',
+          id: c.componentId,
+          name: c.name,
+          repoName: c.repoName,
+          remote: c.remote,
+          host: c.host,
+          refs: c.refs,
+          owner: c.owner,
+        }
+      }
+
+      const knownAutomation = opts.automation || componentId.startsWith('au-')
+
+      let info: ResolvedArtifact
       try {
-        info = await getComponentGit(token, componentId, apiBase)
+        info = knownAutomation ? await resolveAutomation() : await resolveComponent()
       } catch (err) {
-        console.error(
-          `Could not resolve widget ${componentId}: ${err instanceof Error ? err.message : String(err)}`
-        )
-        process.exit(1)
+        // A widget that 404s might be an automation — try the other endpoint
+        // before giving up.
+        if (!knownAutomation) {
+          try {
+            info = await resolveAutomation()
+          } catch {
+            console.error(
+              `Could not resolve artifact ${componentId}: ${err instanceof Error ? err.message : String(err)}`
+            )
+            process.exit(1)
+          }
+        } else {
+          console.error(
+            `Could not resolve automation ${componentId}: ${err instanceof Error ? err.message : String(err)}`
+          )
+          process.exit(1)
+        }
       }
 
       const targetDir = dir ?? componentId
@@ -201,14 +260,15 @@ export const cloneCommand = new Command('clone')
       // Check out the draft working branch and link the directory.
       await checkout(targetDir, info.refs.draft)
       // Trust an explicit owner from the git endpoint over the picker
-      // fallback: a user-owned widget must not inherit pickedAccountId.
+      // fallback: a user-owned artifact must not inherit pickedAccountId.
       const accountId = info.owner
         ? info.owner.kind === 'account'
           ? info.owner.id
           : undefined
         : pickedAccountId
       writeEekoConfig(path.resolve(targetDir), {
-        componentId: info.componentId,
+        componentId: info.kind === 'component' ? info.id : undefined,
+        automationId: info.kind === 'automation' ? info.id : undefined,
         apiHost: opts.apiHost,
         accountId,
       })

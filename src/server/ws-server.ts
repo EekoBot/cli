@@ -84,17 +84,19 @@ export class DevWebSocketServer extends EventEmitter {
       this.clients.add(ws)
       this.emit('client:connect', { count: this.clients.size })
 
-      // Send initial state — real componentId/userId, but EMPTY configs: the
-      // real config values are seeded by the dev server's __EEKO_INIT__
-      // injection (mirrors IframeWidgetHost's eeko:init).
+      // Send initial state — the real componentId/userId AND the resolved
+      // configs. Empty configs here would clobber the page's __EEKO_INIT__
+      // (the bridge's `command:init` overwrites getState), so any binding
+      // that resolves from globalConfig (e.g. a goal bar's denominator) would
+      // silently no-op in dev while production is correct.
       this.sendToClient(ws, {
         type: 'command',
         command: 'init',
         state: {
           componentId: this.initState?.componentId ?? 'dev-component',
           userId: this.initState?.userId ?? 'dev-user',
-          globalConfig: {},
-          variantConfig: {},
+          globalConfig: this.initState?.globalConfig ?? {},
+          variantConfig: this.initState?.variantConfig ?? {},
         },
       })
 

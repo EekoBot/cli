@@ -3,8 +3,9 @@
  *
  * Wired into repo-local git config by `eeko clone` / `eeko init`. git invokes
  * it with `get` / `store` / `erase` and a key=value block on stdin. On `get`
- * we derive the componentId from the requested repo path, mint a short-lived
- * write token via nexus-api, and hand it to git. The token is never persisted
+ * we derive the artifact (component `uc-` or automation `au-`) from the
+ * requested repo path, mint a short-lived write token via nexus-api, and hand
+ * it to git. The token is never persisted
  * (`store` is a no-op); the developer's identity session is the only durable
  * secret.
  */
@@ -35,23 +36,29 @@ function parseInput(raw: string): Record<string, string> {
 }
 
 /**
- * Derive the componentId from git's `path` (sent when useHttpPath=true).
- * Repo names are `uc-{componentId}`; the path looks like `.../uc-{id}.git`.
+ * The artifact a git `path` points at (sent when useHttpPath=true). Repo names
+ * are `uc-{componentId}` for widgets and `au-{automationId}` for automations;
+ * the path looks like `.../uc-{id}.git` or `.../au-{id}.git`.
  */
-function componentIdFromPath(p: string | undefined): string | null {
+export type ArtifactTarget =
+  | { componentId: string }
+  | { automationId: string }
+
+export function artifactTargetFromPath(p: string | undefined): ArtifactTarget | null {
   if (!p) return null
   const segments = p.split('/').filter(Boolean)
   for (const seg of segments) {
     const name = seg.replace(/\.git$/, '')
-    if (name.startsWith('uc-')) return name.slice(3)
+    if (name.startsWith('uc-')) return { componentId: name.slice(3) }
+    if (name.startsWith('au-')) return { automationId: name.slice(3) }
   }
   return null
 }
 
 async function handleGet(input: Record<string, string>): Promise<void> {
-  const componentId = componentIdFromPath(input.path)
-  if (!componentId) {
-    // Can't resolve which widget — stay silent so git can fall through.
+  const target = artifactTargetFromPath(input.path)
+  if (!target) {
+    // Can't resolve which artifact — stay silent so git can fall through.
     process.exit(0)
   }
 
@@ -65,7 +72,7 @@ async function handleGet(input: Record<string, string>): Promise<void> {
 
   const apiBase = loadEekoConfig()?.apiHost ?? AUTH_CONFIG.api.baseUrl
   try {
-    const cred = await mintGitCredentials(token, componentId, 'write', apiBase)
+    const cred = await mintGitCredentials(token, target, 'write', apiBase)
     const expiryUnix = Math.floor(new Date(cred.expiresAt).getTime() / 1000)
     let out =
       `protocol=https\n` +
