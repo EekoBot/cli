@@ -31,6 +31,9 @@ import {
   createTriggerPayload,
   createMountPayload,
   createUnmountPayload,
+  createVariableUpdatedPayload,
+  createSyncPayload,
+  createDismissPayload,
   getAllTestChatPayloads,
 } from '../test-events/index.js'
 import { readDevDescriptor, DEV_DESCRIPTOR_FILENAME } from '../utils/dev-descriptor.js'
@@ -262,6 +265,7 @@ testCommand
   .command('trigger')
   .description('Send a component trigger event')
   .option('-d, --data <json>', 'Custom JSON payload', '{}')
+  .option('--no-defaults', 'Send only --data, without the default trigger fields')
   .action((options) => {
     let customData = {}
     try {
@@ -270,7 +274,8 @@ testCommand
       console.error('Invalid JSON for --data')
       process.exit(1)
     }
-    const payload = createTriggerPayload(customData)
+    // commander sets `options.defaults = false` for `--no-defaults`.
+    const payload = createTriggerPayload(customData, { defaults: options.defaults })
     render(<TestUI eventType="component_trigger" payload={payload} wsPort={resolveWsPort()} />)
   })
 
@@ -360,8 +365,12 @@ testCommand
     const delay = parseInt(options.delay, 10) || 500
     const payloads = getAllTestChatPayloads()
 
+    // Every entry — chat, bits, sub, follow — is a UnifiedMessage delivered on
+    // the SINGLE `chat_message` event (its inner `.type` is the discriminator,
+    // NOT the event name). Sending each under its inner type meant bits/sub/
+    // follow never reached a `chat_message` handler.
     const events = payloads.map((payload) => ({
-      eventType: (payload as { type: string }).type as EventType,
+      eventType: 'chat_message' as EventType,
       payload,
       delay,
     }))
@@ -385,6 +394,60 @@ testCommand
   .action(() => {
     const payload = createUnmountPayload()
     render(<TestUI eventType="component_unmount" payload={payload} wsPort={resolveWsPort()} />)
+  })
+
+// test variable — variable_updated
+testCommand
+  .command('variable')
+  .description('Send a variable_updated event')
+  .option('-n, --name <name>', 'Variable key', 'goal')
+  .option('-v, --value <value>', 'New value', '50')
+  .option('-p, --previous <value>', 'Previous value')
+  .action((options) => {
+    const num = Number(options.value)
+    const value = options.value !== '' && !Number.isNaN(num) ? num : options.value
+    const payload = createVariableUpdatedPayload(options.name, value, options.previous)
+    render(<TestUI eventType="variable_updated" payload={payload} wsPort={resolveWsPort()} />)
+  })
+
+// test sync — component_sync (full re-sync)
+testCommand
+  .command('sync')
+  .description('Send a component_sync event')
+  .option('-d, --data <json>', 'Config/state JSON to sync', '{}')
+  .action((options) => {
+    let data = {}
+    try {
+      data = JSON.parse(options.data)
+    } catch {
+      console.error('Invalid JSON for --data')
+      process.exit(1)
+    }
+    render(
+      <TestUI eventType="component_sync" payload={createSyncPayload(data)} wsPort={resolveWsPort()} />
+    )
+  })
+
+// test dismiss — component_dismiss (hide the current instance early)
+testCommand
+  .command('dismiss')
+  .description('Send a component_dismiss event')
+  .option('-d, --data <json>', 'Optional payload', '{}')
+  .action((options) => {
+    let data = {}
+    try {
+      data = JSON.parse(options.data)
+    } catch {
+      console.error('Invalid JSON for --data')
+      process.exit(1)
+    }
+    render(
+      <TestUI
+        eventType="component_dismiss"
+        payload={createDismissPayload(data)}
+        wsPort={resolveWsPort()}
+      />
+    )
   })
 
 // test update

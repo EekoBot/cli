@@ -120,17 +120,22 @@ export function toEnvelope(
         payload: obj.payload,
       }
     }
-    // `{ type, context, ...data }` (chat/sub/monetary/engagement test payloads)
-    // → lift the data fields under `payload`.
-    if ('type' in obj && 'context' in obj) {
-      const { type, context, ...rest } = obj
+    // chat_message family: the raw object IS the UnifiedMessage — it carries
+    // its OWN discriminator `type` (chat_message / monetary_event /
+    // subscription_event / engagement_event) and `context`. Production
+    // (chat-relay) publishes the WHOLE UnifiedMessage as the envelope payload,
+    // so a handler receives `msg.type` and `msg.context.platform`. Keep it
+    // intact — do NOT lift its fields out (the old behaviour stripped type +
+    // context, so `eeko test chat` delivered a shape production never sends).
+    if (event === 'chat_message') {
+      const ctx = (obj.context as Record<string, unknown>) ?? {}
       return {
-        type: String(type ?? event),
-        context: (context as Record<string, unknown>) ?? {},
-        payload: rest,
+        type: 'chat_message',
+        context: { platform: ctx.platform, channelId: ctx.channelId },
+        payload: obj,
       }
     }
-    // Bare data (`component_trigger` / mount / unmount test payloads).
+    // Bare data (`component_trigger` dataPoints / mount / unmount test payloads).
     return { type: event, context: {}, payload: obj }
   }
   return { type: event, context: {}, payload: raw }

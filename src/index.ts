@@ -12,6 +12,7 @@
  *   eeko whoami    Show current user
  *   eeko publish   Push local widget changes to your draft ref
  *   eeko promote   Publish your widget live (draft → main)
+ *   eeko automation init  Create a git-native automation for a project
  */
 
 import { Command } from 'commander'
@@ -30,6 +31,7 @@ import { publishCommand } from './commands/publish.js'
 import { promoteCommand } from './commands/promote.js'
 import { credentialHelperCommand } from './commands/credential-helper.js'
 import { agentsMdCommand } from './commands/agents-md.js'
+import { automationCommand } from './commands/automation-init.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const pkg = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf-8'))
@@ -48,6 +50,7 @@ program.addCommand(logoutCommand)
 program.addCommand(whoamiCommand)
 program.addCommand(publishCommand)
 program.addCommand(promoteCommand)
+program.addCommand(automationCommand)
 program.addCommand(agentsMdCommand)
 // Hidden — invoked by git, not humans.
 program.addCommand(credentialHelperCommand, { hidden: true })

@@ -73,6 +73,48 @@ export interface ComponentSource {
   }
 }
 
+export interface AutomationGitInfo {
+  ok: boolean
+  automationId: string
+  name?: string
+  repoName: string
+  remote: string
+  host: string
+  refs: { draft: string; main: string }
+  owner?: { kind: 'user' | 'account'; id: string }
+}
+
+export interface AutomationSource {
+  ok: boolean
+  sha: string
+  ref: string
+  /** The serialized automation.json string. */
+  automation: string
+}
+
+/** A single validation problem surfaced by validate/commit-draft. */
+export interface AutomationValidationIssue {
+  stage: string
+  field?: string
+  message: string
+}
+
+export interface AutomationValidationResult {
+  ok: boolean
+  issues?: AutomationValidationIssue[]
+}
+
+export interface CreateAutomationResult {
+  ok: boolean
+  /** The BARE automation id — store as `automationId` in eeko.config.json. */
+  automationId: string
+  name: string
+  repoName: string
+  remote: string
+  host: string
+  refs: { draft: string; main: string }
+}
+
 export interface CommitResult {
   ok?: boolean
   success?: boolean
@@ -252,17 +294,155 @@ export async function promoteDraft(
 
 /**
  * Mint a scoped, short-lived git credential for `git clone`/`git push`.
+ *
+ * The target is either a widget (`{ componentId }`) or an automation
+ * (`{ automationId }`); nexus-api accepts both shapes and returns the same
+ * credential envelope. The credential helper resolves which one from the repo
+ * prefix (`uc-` vs `au-`).
  */
 export async function mintGitCredentials(
   token: string,
-  componentId: string,
+  target: { componentId: string } | { automationId: string },
   scope: 'read' | 'write',
   apiBase: string = DEFAULT_API_BASE
 ): Promise<GitCredentials> {
   return apiRequest<GitCredentials>(apiBase, '/api/git/credentials', token, {
     method: 'POST',
-    body: JSON.stringify({ componentId, scope }),
+    body: JSON.stringify({ ...target, scope }),
   })
+}
+
+/**
+ * Create a new automation. Provisions an `au-{id}` Artifacts repo (seeded on
+ * both `main` and `draft`) and returns its bare automation id.
+ */
+export async function createAutomation(
+  token: string,
+  input: { name: string; projectId: string; accountId?: string },
+  apiBase: string = DEFAULT_API_BASE
+): Promise<CreateAutomationResult> {
+  return apiRequest<CreateAutomationResult>(apiBase, '/api/automations/init', token, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+/**
+ * Resolve an automation to its Artifacts git remote + refs (mirror of
+ * getComponentGit). Returns no token.
+ */
+export async function getAutomationGit(
+  token: string,
+  automationId: string,
+  apiBase: string = DEFAULT_API_BASE
+): Promise<AutomationGitInfo> {
+  return apiRequest<AutomationGitInfo>(
+    apiBase,
+    `/api/automations/${automationId}/git`,
+    token
+  )
+}
+
+/**
+ * Read the automation's canonical `automation.json` at a ref (default: the
+ * row's draft ref).
+ */
+export async function getAutomationSource(
+  token: string,
+  automationId: string,
+  ref: string | undefined,
+  apiBase: string = DEFAULT_API_BASE
+): Promise<AutomationSource> {
+  const q = ref ? `?ref=${encodeURIComponent(ref)}` : ''
+  return apiRequest<AutomationSource>(
+    apiBase,
+    `/api/automations/${automationId}/source${q}`,
+    token
+  )
+}
+
+/**
+ * Validate a parsed automation.json object against the draft pipeline without
+ * committing. Returns `{ ok:false, issues }` (status 400/403) on failure — the
+ * issues array is surfaced so the CLI can print field-level errors.
+ */
+export async function validateAutomationDraft(
+  token: string,
+  automationId: string,
+  automation: unknown,
+  apiBase: string = DEFAULT_API_BASE
+): Promise<AutomationValidationResult> {
+  const url = `${apiBase}/api/automations/${automationId}/validate-draft`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ automation }),
+  })
+  const data = (await response.json().catch(() => null)) as
+    | (AutomationValidationResult & ApiError)
+    | null
+  if (response.ok) {
+    return { ok: true, issues: data?.issues }
+  }
+  // 400/403 carry the structured issues — return them instead of throwing so
+  // the caller can pretty-print field-level errors.
+  if (data && (Array.isArray(data.issues) || data.ok === false)) {
+    return { ok: false, issues: data.issues ?? [] }
+  }
+  throw new Error(data?.error || `API error: ${response.status}`)
+}
+
+/**
+ * Commit a parsed automation.json object to the draft ref (the no-git fallback
+ * to a native `git push`). Validates server-side; on failure the error body may
+ * carry `issues`, which are returned for field-level reporting.
+ */
+export async function commitAutomationDraft(
+  token: string,
+  automationId: string,
+  automation: unknown,
+  message?: string,
+  apiBase: string = DEFAULT_API_BASE
+): Promise<CommitResult & { issues?: AutomationValidationIssue[] }> {
+  const url = `${apiBase}/api/automations/${automationId}/commit-draft`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ automation, message }),
+  })
+  const data = (await response.json().catch(() => null)) as
+    | (CommitResult & { issues?: AutomationValidationIssue[] } & ApiError)
+    | null
+  if (!response.ok) {
+    if (data && Array.isArray(data.issues)) {
+      return { ok: false, issues: data.issues }
+    }
+    throw new Error(data?.error || `API error: ${response.status}`)
+  }
+  return data as CommitResult & { issues?: AutomationValidationIssue[] }
+}
+
+/**
+ * Promote the automation's draft ref to main (publish live). Server-mediated
+ * gate.
+ */
+export async function promoteAutomationDraft(
+  token: string,
+  automationId: string,
+  apiBase: string = DEFAULT_API_BASE
+): Promise<CommitResult> {
+  return apiRequest<CommitResult>(
+    apiBase,
+    `/api/automations/${automationId}/promote-draft`,
+    token,
+    { method: 'POST', body: JSON.stringify({}) }
+  )
 }
 
 /**
