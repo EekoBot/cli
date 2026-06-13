@@ -24,6 +24,7 @@ import { AUTH_CONFIG } from '../auth/config.js'
 import { writeEekoConfig } from '../utils/config.js'
 import { writeAgentFiles } from '../utils/agent-files.js'
 import { registerProjectMediaCommands } from './project-media.js'
+import { releaseCommand } from './project-release.js'
 
 /** Reserved `--account` value that forces the personal path, even over a slug literally "personal". */
 const PERSONAL_SENTINEL = 'personal'
@@ -295,3 +296,5 @@ export const projectCommand = new Command('project')
 
 // `eeko project thumbnail` / `eeko project gallery` — marketplace images.
 registerProjectMediaCommands(projectCommand)
+// `eeko project release` — cut a marketplace release (owner-controlled).
+projectCommand.addCommand(releaseCommand)

@@ -100,7 +100,7 @@ SVG is not allowed; images are uploaded public so the marketplace can render the
 ## Human-only steps — never run these yourself
 
 - \`eeko promote\` (draft → main, i.e. going live) for the **widget** is the owner's decision.
-- Marketplace releases are cut in the merchant app, never from these directories.
+- \`eeko project release\` (cut a marketplace release) is the owner's call — only run it if explicitly asked. Every release is reviewed and approved by an Eeko admin before it's public.
 
 Stop after \`eeko publish\` (each side you touched) and report what you built.
 
