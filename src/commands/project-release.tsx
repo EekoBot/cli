@@ -138,27 +138,32 @@ function ReleaseUI({ initial }: { initial: ReleaseOptions }) {
 
 export const releaseCommand = new Command('release')
   .description('Cut a marketplace release of this project (creates a draft for review)')
-  .requiredOption('--version <semver>', 'Release version, e.g. 1.0.0')
+  // Version is a POSITIONAL argument, not `--version`: a `--version` option here
+  // collides with the CLI's global `--version` flag (commander prints the CLI
+  // version and exits), so `release --version 1.0.0` silently no-ops.
+  .argument('<version>', 'Release version (semver), e.g. 1.0.0')
   .requiredOption('--changelog <text>', "What changed in this release (shown on the listing)")
   .option('--submit', 'Also submit the release for review (instead of leaving a draft)')
   .addOption(new Option('--api-host <url>', 'Override the API base URL (internal/staging use)').hideHelp())
-  .action((opts: { version: string; changelog: string; submit?: boolean; apiHost?: string }) => {
-    if (!SEMVER.test(opts.version)) {
-      console.error(`Invalid --version "${opts.version}". Use semver, e.g. 1.0.0`)
-      process.exit(1)
+  .action(
+    (version: string, opts: { changelog: string; submit?: boolean; apiHost?: string }) => {
+      if (!SEMVER.test(version)) {
+        console.error(`Invalid version "${version}". Use semver, e.g. 1.0.0`)
+        process.exit(1)
+      }
+      if (!opts.changelog.trim()) {
+        console.error('--changelog must not be empty.')
+        process.exit(1)
+      }
+      render(
+        <ReleaseUI
+          initial={{
+            version,
+            changelog: opts.changelog,
+            submit: opts.submit,
+            apiHost: opts.apiHost,
+          }}
+        />
+      )
     }
-    if (!opts.changelog.trim()) {
-      console.error('--changelog must not be empty.')
-      process.exit(1)
-    }
-    render(
-      <ReleaseUI
-        initial={{
-          version: opts.version,
-          changelog: opts.changelog,
-          submit: opts.submit,
-          apiHost: opts.apiHost,
-        }}
-      />
-    )
-  })
+  )
