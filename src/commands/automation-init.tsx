@@ -113,9 +113,15 @@ function seedIsEmpty(dir: string): boolean {
     const raw = readFileSync(file, 'utf-8').trim()
     if (!raw) return true
     const parsed = JSON.parse(raw)
-    // An empty object / array seed counts as empty too.
+    // An empty object, or a config with no triggers AND no actions (the
+    // server's blank draft seed `{triggers:[],actions:[]}`), counts as empty
+    // so we replace it with the wired shell scaffold.
     if (parsed && typeof parsed === 'object') {
-      return Object.keys(parsed).length === 0
+      const obj = parsed as { triggers?: unknown; actions?: unknown }
+      if (Object.keys(obj).length === 0) return true
+      const noTriggers = !Array.isArray(obj.triggers) || obj.triggers.length === 0
+      const noActions = !Array.isArray(obj.actions) || obj.actions.length === 0
+      return noTriggers && noActions
     }
     return false
   } catch {
