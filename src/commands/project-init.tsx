@@ -23,6 +23,7 @@ import { createProject, getAccounts, matchAccount, type EekoAccount } from '../a
 import { AUTH_CONFIG } from '../auth/config.js'
 import { writeEekoConfig } from '../utils/config.js'
 import { writeAgentFiles } from '../utils/agent-files.js'
+import { registerProjectMediaCommands } from './project-media.js'
 
 /** Reserved `--account` value that forces the personal path, even over a slug literally "personal". */
 const PERSONAL_SENTINEL = 'personal'
@@ -291,3 +292,6 @@ const projectInitCommand = new Command('init')
 export const projectCommand = new Command('project')
   .description('Author Eeko projects (a widget and/or automation, git-native)')
   .addCommand(projectInitCommand)
+
+// `eeko project thumbnail` / `eeko project gallery` — marketplace images.
+registerProjectMediaCommands(projectCommand)
