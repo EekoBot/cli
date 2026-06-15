@@ -22,9 +22,10 @@ import { createListing, advanceListing } from '../api/client.js'
 const SEMVER = /^\d+\.\d+\.\d+$/
 
 interface ReleaseOptions {
-  version: string
+  version?: string
   changelog: string
   submit?: boolean
+  private?: boolean
   apiHost?: string
 }
 
@@ -33,6 +34,7 @@ interface ReleaseResult {
   listingId: string
   state: string
   submitted: boolean
+  isPrivate: boolean
 }
 
 function ReleaseUI({ initial }: { initial: ReleaseOptions }) {
@@ -65,29 +67,40 @@ function ReleaseUI({ initial }: { initial: ReleaseOptions }) {
       }
       if (!ctx.accountId) {
         failAndExit(
-          'Marketplace releases need an account-owned project. This looks like a personal project — create it with `eeko project init --account <slug>`.'
+          'Releases need an account-owned project. This looks like a personal project — create it with `eeko project init --account <slug>`.'
         )
         return
       }
       const apiBase = ctx.apiHost ?? AUTH_CONFIG.api.baseUrl
+      const isPrivate = !!initial.private
       try {
-        setStatus(`Cutting release v${initial.version}…`)
+        setStatus(isPrivate ? 'Publishing privately…' : `Cutting release v${initial.version}…`)
         const { listing } = await createListing(
           token,
-          { projectId: ctx.projectId, versionLabel: initial.version, changelog: initial.changelog },
+          isPrivate
+            ? { projectId: ctx.projectId, listingKind: 'private', changelog: initial.changelog }
+            : {
+                projectId: ctx.projectId,
+                versionLabel: initial.version,
+                changelog: initial.changelog,
+              },
           apiBase
         )
         let finalState = listing.approval_state
-        if (initial.submit) {
+        // Private releases publish straight to grantees — there is no review to
+        // submit to, so --submit is a no-op for them.
+        if (initial.submit && !isPrivate) {
           setStatus('Submitting for review…')
           const adv = await advanceListing(token, listing.id, 'submit_internal', apiBase)
           finalState = adv.approval_state ?? adv.state ?? finalState
         }
         setResult({
-          versionLabel: listing.version_label,
+          // Private listings carry no semver label — fall back to the integer version.
+          versionLabel: listing.version_label ?? String(listing.version),
           listingId: listing.id,
           state: finalState,
-          submitted: !!initial.submit,
+          submitted: !!initial.submit && !isPrivate,
+          isPrivate,
         })
         setState('done')
         setTimeout(() => exit(), 500)
@@ -117,15 +130,20 @@ function ReleaseUI({ initial }: { initial: ReleaseOptions }) {
       {state === 'done' && result && (
         <Box flexDirection="column">
           <Text color="green">
-            ✓ Release v{result.versionLabel} {result.submitted ? 'submitted for review' : 'created'}
+            ✓{' '}
+            {result.isPrivate
+              ? `Published privately (v${result.versionLabel})`
+              : `Release v${result.versionLabel} ${result.submitted ? 'submitted for review' : 'created'}`}
           </Text>
           <Box marginTop={1} flexDirection="column">
             <Text dimColor>listing: {result.listingId}</Text>
             <Text dimColor>state: {result.state}</Text>
             <Text dimColor>
-              {result.submitted
-                ? 'An Eeko admin reviews and approves it before it goes live.'
-                : 'Draft — not public. Re-run with --submit to send it for review, or submit it in the merchant app.'}
+              {result.isPrivate
+                ? 'Live for people you share it with. Invite them by email in the merchant app (Share access) — until then no one can see it.'
+                : result.submitted
+                  ? 'An Eeko admin reviews and approves it before it goes live.'
+                  : 'Draft — not public. Re-run with --submit to send it for review, or submit it in the merchant app.'}
             </Text>
           </Box>
         </Box>
@@ -137,19 +155,41 @@ function ReleaseUI({ initial }: { initial: ReleaseOptions }) {
 }
 
 export const releaseCommand = new Command('release')
-  .description('Cut a marketplace release of this project (creates a draft for review)')
+  .description(
+    'Cut a release of this project — public marketplace (default) or --private to share directly'
+  )
   // Version is a POSITIONAL argument, not `--version`: a `--version` option here
   // collides with the CLI's global `--version` flag (commander prints the CLI
-  // version and exits), so `release --version 1.0.0` silently no-ops.
-  .argument('<version>', 'Release version (semver), e.g. 1.0.0')
-  .requiredOption('--changelog <text>', "What changed in this release (shown on the listing)")
-  .option('--submit', 'Also submit the release for review (instead of leaving a draft)')
+  // version and exits), so `release --version 1.0.0` silently no-ops. Optional
+  // because a private release auto-increments an integer version server-side and
+  // carries no semver label.
+  .argument('[version]', 'Release version (semver), e.g. 1.0.0 — required for marketplace, ignored with --private')
+  .requiredOption('--changelog <text>', 'What changed in this release (shown on the listing / opt-in update prompt)')
+  .option(
+    '--private',
+    'Publish privately (skips Eeko review) — shared by email in the merchant app, never listed on the marketplace'
+  )
+  .option('--submit', 'Also submit the release for review (marketplace only; ignored with --private)')
   .addOption(new Option('--api-host <url>', 'Override the API base URL (internal/staging use)').hideHelp())
   .action(
-    (version: string, opts: { changelog: string; submit?: boolean; apiHost?: string }) => {
-      if (!SEMVER.test(version)) {
-        console.error(`Invalid version "${version}". Use semver, e.g. 1.0.0`)
-        process.exit(1)
+    (
+      version: string | undefined,
+      opts: { changelog: string; submit?: boolean; private?: boolean; apiHost?: string }
+    ) => {
+      // A marketplace release needs a semver label; a private release does not
+      // (the integer version auto-increments), so the positional is optional and
+      // ignored with --private.
+      if (!opts.private) {
+        if (!version) {
+          console.error(
+            'A version is required for a marketplace release, e.g. `eeko project release 1.0.0 --changelog "…"`. To share privately instead, pass --private.'
+          )
+          process.exit(1)
+        }
+        if (!SEMVER.test(version)) {
+          console.error(`Invalid version "${version}". Use semver, e.g. 1.0.0`)
+          process.exit(1)
+        }
       }
       if (!opts.changelog.trim()) {
         console.error('--changelog must not be empty.')
@@ -161,6 +201,7 @@ export const releaseCommand = new Command('release')
             version,
             changelog: opts.changelog,
             submit: opts.submit,
+            private: opts.private,
             apiHost: opts.apiHost,
           }}
         />
