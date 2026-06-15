@@ -31,6 +31,10 @@ export interface InitState {
   /** Runtime behavior hints (displayDuration etc.) — read by the interaction
    * runtime alongside `interactions`. */
   behavior?: Record<string, unknown>
+  /** The widget's design canvas (size + orientation). The SDK runtime bridge
+   * reads it from `__EEKO_INIT__` to pin the design px and zoom-to-fit, so
+   * `eeko dev` renders at the same shape production does. */
+  canvas?: WidgetManifest['canvas']
 }
 
 /**
@@ -81,6 +85,7 @@ export async function loadInitState(
     variantConfig,
     ...(manifest?.interactions ? { interactions: manifest.interactions } : {}),
     ...(manifest?.behavior ? { behavior: manifest.behavior } : {}),
+    ...(manifest?.canvas ? { canvas: manifest.canvas } : {}),
   }
 }
 
