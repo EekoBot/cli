@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@eeko/sdk':
-        specifier: ^0.11.0
-        version: 0.11.0
+        specifier: ^0.11.1
+        version: 0.11.1
       chalk:
         specifier: ^5.3.0
         version: 5.6.2
@@ -82,8 +82,8 @@ packages:
     resolution: {integrity: sha512-3yWxPTq3UQ/FY9p1ErPxIyfT64elWaMvM9lIHnaqpyft63tkxodF5aUElYHrdisWve5cETkh1+KBw1yJuW0aRw==}
     engines: {node: '>=14.13.1'}
 
-  '@eeko/sdk@0.11.0':
-    resolution: {integrity: sha512-JEqOisbwXJm0x4/LEhsgNX4FvSI1dc/tgAUK2V082rKQDbQRvkNjPxpuh8PgLRxtY3LO1wbF6lg4Sm9EDbFkOQ==}
+  '@eeko/sdk@0.11.1':
+    resolution: {integrity: sha512-HgMlGgw4PUJ4RAQc82hqJ3yPtYFiU2JbZ+ZQ7HvQTotBdt5o1iTIZ9boyv3uYKZs1+q7nOVpvHzVDE64cpgoBA==}
     engines: {node: '>=18.0.0'}
 
   '@esbuild/aix-ppc64@0.25.12':
@@ -1235,7 +1235,7 @@ snapshots:
       ansi-styles: 6.2.3
       is-fullwidth-code-point: 4.0.0
 
-  '@eeko/sdk@0.11.0': {}
+  '@eeko/sdk@0.11.1': {}
 
   '@esbuild/aix-ppc64@0.25.12':
     optional: true

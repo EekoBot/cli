@@ -270,19 +270,33 @@ export interface Listing {
 }
 
 /**
- * Cut a marketplace release of an account-owned project. Name/description/
- * category/tags/images all default from the project; the listing is created in
- * `draft` (not public). Releases are free for now (the server rejects a paid
- * price until checkout ships).
+ * Cut a release of an account-owned project. Name/description/category/tags/
+ * images all default from the project. Releases are free for now (the server
+ * rejects a paid price until checkout ships).
+ *
+ * `listingKind` (default 'marketplace'):
+ *   - 'marketplace' → created in `draft`, requires a semver `versionLabel`,
+ *     advances through Eeko review before going public.
+ *   - 'private'     → published immediately to `private_published` (skips review),
+ *     visible only to users you share it with by email. No `versionLabel` needed
+ *     (the integer version auto-increments per release).
  */
 export async function createListing(
   token: string,
-  input: { projectId: string; versionLabel: string; changelog?: string },
+  input: {
+    projectId: string
+    versionLabel?: string
+    changelog?: string
+    listingKind?: 'marketplace' | 'private'
+  },
   apiBase: string = DEFAULT_API_BASE
 ): Promise<{ ok: boolean; listing: Listing }> {
+  const { listingKind = 'marketplace', ...rest } = input
   return apiRequest<{ ok: boolean; listing: Listing }>(apiBase, '/api/listings', token, {
     method: 'POST',
-    body: JSON.stringify({ ...input, listingKind: 'marketplace' }),
+    // undefined fields (e.g. versionLabel for a private release) are dropped by
+    // JSON.stringify, so the server sees exactly what each kind expects.
+    body: JSON.stringify({ ...rest, listingKind }),
   })
 }
 
