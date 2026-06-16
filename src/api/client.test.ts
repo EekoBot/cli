@@ -3,6 +3,7 @@ import {
   matchAccount,
   validateAutomationDraft,
   commitAutomationDraft,
+  createListing,
   type EekoAccount,
 } from './client.js'
 
@@ -98,5 +99,52 @@ describe('commitAutomationDraft', () => {
     const r = await commitAutomationDraft('tok', 'au-1', {}, 'msg', 'https://api.test')
     expect(r.ok).toBe(false)
     expect(r.issues?.[0].message).toBe('unknown widget')
+  })
+})
+
+describe('createListing', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  function captureFetch(body: unknown) {
+    // Type the params so `.mock.calls[0][1]` (the RequestInit) is indexable.
+    const fn = vi.fn(async (_url: string, _init: RequestInit) => ({
+      ok: true,
+      status: 200,
+      json: async () => body,
+    }))
+    vi.stubGlobal('fetch', fn)
+    return fn
+  }
+  const sentBody = (fn: ReturnType<typeof captureFetch>) =>
+    JSON.parse(fn.mock.calls[0]![1].body as string)
+
+  it('defaults to a marketplace release carrying the version label', async () => {
+    const fetchMock = captureFetch({
+      ok: true,
+      listing: { id: 'l1', version: 1, version_label: '1.0.0', approval_state: 'draft' },
+    })
+    await createListing(
+      'tok',
+      { projectId: 'p1', versionLabel: '1.0.0', changelog: 'init' },
+      'https://api.test'
+    )
+    const body = sentBody(fetchMock)
+    expect(body.listingKind).toBe('marketplace')
+    expect(body.versionLabel).toBe('1.0.0')
+  })
+
+  it('sends listingKind=private and OMITS the version label for a private release', async () => {
+    const fetchMock = captureFetch({
+      ok: true,
+      listing: { id: 'l2', version: 1, version_label: null, approval_state: 'private_published' },
+    })
+    await createListing(
+      'tok',
+      { projectId: 'p1', listingKind: 'private', changelog: 'first' },
+      'https://api.test'
+    )
+    const body = sentBody(fetchMock)
+    expect(body.listingKind).toBe('private')
+    expect('versionLabel' in body).toBe(false)
   })
 })

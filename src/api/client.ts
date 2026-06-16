@@ -264,7 +264,8 @@ export async function updateProjectMedia(
 export interface Listing {
   id: string
   version: number
-  version_label: string
+  /** Semver label for marketplace releases; null for private listings (no semver). */
+  version_label: string | null
   approval_state: string
   [key: string]: unknown
 }
